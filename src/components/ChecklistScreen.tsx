@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   QrCode,
@@ -10,18 +10,13 @@ import {
   Sparkles,
   PackageCheck,
   ChevronDown,
-  Trash2,
   Info
 } from 'lucide-react';
 import { ItemEsperado, ItemEscaneado } from '../types';
-import { decodificarQR } from '../services/apiService';
 
 interface ChecklistScreenProps {
   esperados: ItemEsperado[];
   escaneados: ItemEscaneado[];
-  onAgregarEscaneo: (item: ItemEscaneado) => void;
-  onActualizarCantidadEscaneado: (id: string, delta: number) => void;
-  onEliminarEscaneado: (id: string) => void;
   onOpenScanner: () => void;
   onOpenManual: () => void;
   onFinalizar: () => void;
@@ -30,17 +25,13 @@ interface ChecklistScreenProps {
 export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
   esperados,
   escaneados,
-  onAgregarEscaneo,
-  onActualizarCantidadEscaneado,
-  onEliminarEscaneado,
   onOpenScanner,
   onOpenManual,
   onFinalizar,
 }) => {
   const [filtro, setFiltro] = useState<'todos' | 'pendientes' | 'coinciden' | 'extra'>('todos');
-  const [lastScannedId, setLastScannedId] = useState<string | null>(null);
-  const [lastScanType, setLastScanType] = useState<'match' | 'no_esperado' | null>(null);
   const [toastMsg, setToastMsg] = useState<{ text: string; type: 'match' | 'extra' } | null>(null);
+  const cantidadAnteriorRef = useRef(escaneados.length);
 
   // Calcular totales de progreso
   const totalEsperadosDistintos = esperados.length;
@@ -71,40 +62,21 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
     }
   }, [toastMsg]);
 
-  // Handler para cuando se procesa un QR escaneado
-  const handleProcessQR = (qrRawText: string) => {
-    const decoded = decodificarQR(qrRawText);
-    const espMatch = esperados.find(e => e.idProd === decoded.idProd);
-
-    const isMatch = Boolean(espMatch);
-    const nuevoEscaneo: ItemEscaneado = {
-      id: 'ESC-' + Date.now() + '-' + Math.floor(Math.random() * 100),
-      idProd: decoded.idProd,
-      nombreProducto: decoded.nombreProducto,
-      partida: decoded.partida,
-      venc: decoded.venc,
-      cantidad: 1,
-      origenCarga: 'qr',
-      matched: isMatch,
-      timestamp: new Date().toLocaleTimeString().slice(0, 5),
-    };
-
-    onAgregarEscaneo(nuevoEscaneo);
-    setLastScannedId(nuevoEscaneo.id);
-    setLastScanType(isMatch ? 'match' : 'no_esperado');
-
-    if (isMatch) {
-      setToastMsg({
-        text: `✓ Coincide: ${decoded.nombreProducto}`,
-        type: 'match'
-      });
-    } else {
-      setToastMsg({
-        text: `⚠ NO ESPERADO: ${decoded.nombreProducto}`,
-        type: 'extra'
-      });
+  // Mostrar un toast cada vez que se confirma una captura nueva (QR o manual).
+  // El escaneo en si ya fue resuelto por el servidor antes de llegar acá
+  // (App.tsx agrega al principio de la lista), acá solo reaccionamos al
+  // cambio para dar feedback inmediato.
+  useEffect(() => {
+    if (escaneados.length > cantidadAnteriorRef.current) {
+      const nuevo = escaneados[0];
+      setToastMsg(
+        nuevo.matched
+          ? { text: `✓ Coincide: ${nuevo.nombreProducto}`, type: 'match' }
+          : { text: `⚠ NO ESPERADO: ${nuevo.nombreProducto}`, type: 'extra' }
+      );
     }
-  };
+    cantidadAnteriorRef.current = escaneados.length;
+  }, [escaneados]);
 
   return (
     <div className="min-h-screen flex flex-col justify-between bg-[#F5EDE1] text-[#3B2417] pb-36 max-w-md mx-auto relative">
@@ -287,29 +259,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
                         <span className="font-mono text-[#3B2417] text-[11px]">
                           {esc.origenCarga === 'qr' ? 'QR' : 'Manual'} • {esc.timestamp}
                         </span>
-                        
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => onActualizarCantidadEscaneado(esc.id, -1)}
-                            className="w-7 h-7 rounded-lg bg-[#E8DDD0] hover:bg-[#D5C4B1] font-bold text-sm flex items-center justify-center cursor-pointer"
-                          >
-                            -
-                          </button>
-                          <span className="font-bold text-xs">{esc.cantidad} u.</span>
-                          <button
-                            onClick={() => onActualizarCantidadEscaneado(esc.id, 1)}
-                            className="w-7 h-7 rounded-lg bg-[#E8DDD0] hover:bg-[#D5C4B1] font-bold text-sm flex items-center justify-center cursor-pointer"
-                          >
-                            +
-                          </button>
-                          <button
-                            onClick={() => onEliminarEscaneado(esc.id)}
-                            title="Eliminar captura"
-                            className="p-1 text-[#B91C1C] hover:bg-red-50 rounded-lg cursor-pointer ml-1"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                        <span className="font-bold text-xs text-[#3B2417]">{esc.cantidad} u.</span>
                       </div>
                     ))}
                   </div>
@@ -347,21 +297,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
                     </p>
                   </div>
 
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => onActualizarCantidadEscaneado(esc.id, -1)}
-                      className="w-8 h-8 rounded-xl bg-red-100 hover:bg-red-200 font-bold text-sm text-[#991B1B] flex items-center justify-center cursor-pointer"
-                    >
-                      -
-                    </button>
-                    <span className="font-bold text-sm text-[#991B1B]">{esc.cantidad} u.</span>
-                    <button
-                      onClick={() => onActualizarCantidadEscaneado(esc.id, 1)}
-                      className="w-8 h-8 rounded-xl bg-red-100 hover:bg-red-200 font-bold text-sm text-[#991B1B] flex items-center justify-center cursor-pointer"
-                    >
-                      +
-                    </button>
-                  </div>
+                  <span className="font-bold text-sm text-[#991B1B]">{esc.cantidad} u.</span>
                 </div>
               </div>
             ))}

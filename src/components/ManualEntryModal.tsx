@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { X, Search, Plus, Minus, PackageCheck, Calendar, Hash } from 'lucide-react';
-import { CATALOGO_PRODUCTOS } from '../data/mockData';
+import React, { useState, useEffect } from 'react';
+import { X, Search, Plus, Minus, PackageCheck, Calendar } from 'lucide-react';
+
+type ProductoCatalogo = { idProd: string; nombreProducto: string; categoria: string | null };
 
 interface ManualEntryModalProps {
   isOpen: boolean;
@@ -9,31 +10,39 @@ interface ManualEntryModalProps {
     idProd: string;
     nombreProducto: string;
     cantidad: number;
-    partida: string | null;
     venc: string | null;
   }) => void;
+  productos: ProductoCatalogo[];
+  cargandoProductos: boolean;
 }
 
 export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
   isOpen,
   onClose,
-  onSubmitManual
+  onSubmitManual,
+  productos,
+  cargandoProductos,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedProdId, setSelectedProdId] = useState(CATALOGO_PRODUCTOS[0].idProd);
+  const [selectedProdId, setSelectedProdId] = useState<string | null>(null);
   const [cantidad, setCantidad] = useState(1);
-  const [partida, setPartida] = useState('');
   const [venc, setVenc] = useState('');
+
+  useEffect(() => {
+    if (isOpen && productos.length > 0 && !selectedProdId) {
+      setSelectedProdId(productos[0].idProd);
+    }
+  }, [isOpen, productos, selectedProdId]);
 
   if (!isOpen) return null;
 
-  const productosFiltrados = CATALOGO_PRODUCTOS.filter(p =>
+  const productosFiltrados = productos.filter(p =>
     p.nombreProducto.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.idProd.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.categoria.toLowerCase().includes(searchTerm.toLowerCase())
+    (p.categoria || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const productoSeleccionado = CATALOGO_PRODUCTOS.find(p => p.idProd === selectedProdId) || CATALOGO_PRODUCTOS[0];
+  const productoSeleccionado = productos.find(p => p.idProd === selectedProdId) || productos[0];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,13 +52,11 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
       idProd: productoSeleccionado.idProd,
       nombreProducto: productoSeleccionado.nombreProducto,
       cantidad,
-      partida: partida.trim() ? partida.trim() : null,
       venc: venc.trim() ? venc.trim() : null,
     });
 
     // Resetear form para la próxima
     setCantidad(1);
-    setPartida('');
     setVenc('');
     onClose();
   };
@@ -96,7 +103,9 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
             </div>
 
             <div className="max-h-36 overflow-y-auto border-2 border-[#D8C6B3] rounded-2xl bg-white divide-y divide-[#E3D4C4]">
-              {productosFiltrados.length === 0 ? (
+              {cargandoProductos ? (
+                <div className="p-3 text-xs text-[#8C715F] text-center">Cargando catálogo...</div>
+              ) : productosFiltrados.length === 0 ? (
                 <div className="p-3 text-xs text-[#8C715F] text-center">No se encontraron productos.</div>
               ) : (
                 productosFiltrados.map((prod) => (
@@ -112,7 +121,7 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
                   >
                     <div>
                       <span className="block text-xs text-[#3B2417]">{prod.nombreProducto}</span>
-                      <span className="text-[10px] text-[#8C715F]">{prod.categoria} • {prod.idProd}</span>
+                      <span className="text-[10px] text-[#8C715F]">{prod.categoria || 'Sin rubro'} • {prod.idProd}</span>
                     </div>
                     {selectedProdId === prod.idProd && (
                       <span className="text-xs text-[#C1502E] font-bold">Seleccionado</span>
@@ -152,24 +161,10 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
             </div>
           </div>
 
-          {/* Campos Opcionales Lote / Vencimiento */}
-          <div className="grid grid-cols-2 gap-3 pt-1">
-            <div>
-              <label className="block text-[11px] font-semibold text-[#61493B] mb-1">
-                Partida / Lote (Opcional)
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={partida}
-                  onChange={(e) => setPartida(e.target.value)}
-                  placeholder="ej. L-2026-X"
-                  className="w-full h-11 pl-8 pr-2 bg-[#FAF5EE] border border-[#CBB7A3] rounded-xl text-xs text-[#3B2417]"
-                />
-                <Hash className="w-3.5 h-3.5 text-[#8C715F] absolute left-2.5 top-3.5" />
-              </div>
-            </div>
-
+          {/* Vencimiento opcional. La partida/lote no aplica a carga manual:
+              el servidor siempre la trata como null (es para insumos sin QR
+              de fábrica, que no llevan seguimiento de partida). */}
+          <div className="grid grid-cols-1 gap-3 pt-1">
             <div>
               <label className="block text-[11px] font-semibold text-[#61493B] mb-1">
                 Vencimiento (Opcional)

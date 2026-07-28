@@ -6,7 +6,7 @@
 export type ItemEsperado = {
   idProd: string;          // ej "PT-HEL-197"
   nombreProducto: string;    // ej "Helado Dulce de Leche Granizado 5L"
-  categoria: "Balde 5L" | "Pote 1L" | "Impulsivos" | "Conos y Vasos" | "Insumos";
+  categoria: string | null;  // "rubro" del producto en g360, texto libre
   partida: string | null;    // texto crudo de partida cuando el producto tiene QR de fábrica
   cantidad: number;
   venc: string | null;       // fecha ISO

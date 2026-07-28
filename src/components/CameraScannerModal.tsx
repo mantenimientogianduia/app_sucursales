@@ -208,31 +208,27 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
               </p>
 
               <div className="grid grid-cols-1 gap-2.5">
-                {PRESETS_QR_SIMULADOR.map((preset, idx) => {
-                  const isExpected = !preset.etiqueta.includes('NO ESPERADO');
-                  return (
-                    <button
-                      key={idx}
-                      onClick={() => handleSimularPreset(preset.qrString)}
-                      className={`btn-tactile w-full h-14 px-4 rounded-2xl border text-left font-medium text-xs flex items-center justify-between cursor-pointer transition-colors ${
-                        isExpected
-                          ? 'bg-[#1E5128]/30 border-[#1E5128] text-green-200 hover:bg-[#1E5128]/50'
-                          : 'bg-[#B91C1C]/20 border-[#B91C1C] text-red-200 hover:bg-[#B91C1C]/40'
-                      }`}
-                    >
-                      <div className="space-y-0.5">
-                        <span className="block font-bold text-sm text-white">
-                          {preset.etiqueta}
-                        </span>
-                        <span className="block text-[11px] opacity-80">
-                          Partida: {preset.partida}
-                        </span>
-                      </div>
-                      <Check className="w-5 h-5 shrink-0 ml-2" />
-                    </button>
-                  );
-                })}
+                {PRESETS_QR_SIMULADOR.map((preset, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleSimularPreset(preset.qrString)}
+                    className="btn-tactile w-full h-14 px-4 rounded-2xl border text-left font-medium text-xs flex items-center justify-between cursor-pointer transition-colors bg-[#3B2417]/40 border-[#523725] text-[#E8DDD0] hover:bg-[#3B2417]/60"
+                  >
+                    <div className="space-y-0.5">
+                      <span className="block font-bold text-sm text-white">
+                        {preset.etiqueta}
+                      </span>
+                      <span className="block text-[11px] opacity-70 font-mono truncate max-w-[220px]">
+                        {preset.qrString}
+                      </span>
+                    </div>
+                    <Check className="w-5 h-5 shrink-0 ml-2" />
+                  </button>
+                ))}
               </div>
+              <p className="text-[11px] text-[#C5B4A3] mt-3">
+                El servidor decide si cada uno coincide con lo esperado hoy — acá solo se simula la lectura.
+              </p>
             </div>
 
             {/* Input Manual QR genérico */}
@@ -245,7 +241,7 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
                   type="text"
                   value={customQrInput}
                   onChange={(e) => setCustomQrInput(e.target.value)}
-                  placeholder="ej. PT-HEL-101|L-20260728-DDL|2026-10-15"
+                  placeholder="ej. PT-HEL-197PT-HEL-19728/07/2026 10:00:0028/01/2027 4.000"
                   className="flex-1 h-12 bg-[#1A100A] border border-[#3B2417] rounded-xl px-3 text-xs text-white focus:outline-none focus:border-[#C1502E]"
                 />
                 <button

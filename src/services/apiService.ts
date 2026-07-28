@@ -5,229 +5,228 @@ import {
   LocalUsuario,
   RecepcionGuardada
 } from '../types';
-import {
-  LOCAL_DEMO,
-  ESPERADOS_HOY_MOCK,
-  HISTORIAL_MOCK,
-  CATALOGO_PRODUCTOS
-} from '../data/mockData';
 
 /**
- * Servicio API Aislado (MOCK)
- * Diseñado para ser fácil de sustituir por un cliente HTTP/REST real (fetch/axios)
- * sin tocar las pantallas ni componentes de UI.
+ * Servicio API real: habla con el backend app-heladerias-recepcion
+ * (POST /api/login, /api/recepciones, /api/recepciones/:id/escaneos,
+ * /api/recepciones/:id/finalizar, GET /api/productos).
  */
 
-// Claves de localStorage para persistencia opcional en el navegador
+const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:3001';
+
 const STORAGE_KEYS = {
+  TOKEN: 'heladeria_token_v1',
   SESSION: 'heladeria_session_v1',
-  ESPERADOS: 'heladeria_esperados_v1',
-  HISTORIAL: 'heladeria_historial_v1',
 };
 
-// Utilidad para simular latencia de red (100-300ms)
-const simulateLatency = (ms = 180) => new Promise(resolve => setTimeout(resolve, ms));
+// Id de la recepcion en curso (solo tiene sentido una a la vez por pestaña).
+let idRecepcionActual: number | string | null = null;
+
+function getToken(): string | null {
+  return localStorage.getItem(STORAGE_KEYS.TOKEN);
+}
+
+async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
+  const token = getToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> | undefined),
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(data.error || `Error de red (${res.status})`);
+  }
+  return data;
+}
 
 /**
  * Autenticación de Local
  */
-export async function loginLocal(usuario: string, clave: string): Promise<{ ok: boolean; local?: LocalUsuario; mensaje?: string }> {
-  await simulateLatency(250);
-  
-  // Para la demo, aceptamos cualquier credencial no vacía o usuario 'gianduia' / 'centro'
+export async function loginLocal(
+  usuario: string,
+  clave: string
+): Promise<{ ok: boolean; local?: LocalUsuario; mensaje?: string }> {
   if (!usuario.trim() || !clave.trim()) {
     return { ok: false, mensaje: 'Por favor ingrese usuario y contraseña del local.' };
   }
 
-  // Si ingresa 'error' se simula falla
-  if (usuario.toLowerCase() === 'error') {
-    return { ok: false, mensaje: 'Usuario o contraseña incorrectos para este local.' };
-  }
+  try {
+    const data = await apiFetch('/api/login', {
+      method: 'POST',
+      body: JSON.stringify({ usuario, password: clave }),
+    });
 
-  // Guardar sesión mock
-  localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(LOCAL_DEMO));
-  return { ok: true, local: LOCAL_DEMO };
+    const local: LocalUsuario = {
+      id: data.idCliente,
+      nombreLocal: data.nombreLocal || data.idCliente,
+      direccion: '',
+      sucursalCodigo: usuario,
+    };
+
+    localStorage.setItem(STORAGE_KEYS.TOKEN, data.token);
+    localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(local));
+    return { ok: true, local };
+  } catch (err: any) {
+    return { ok: false, mensaje: err.message || 'Usuario o contraseña incorrectos para este local.' };
+  }
 }
 
 export async function getSesionActual(): Promise<LocalUsuario | null> {
+  if (!getToken()) return null;
   const data = localStorage.getItem(STORAGE_KEYS.SESSION);
-  if (!data) return LOCAL_DEMO; // Default para agilizar demo si no hay sesión
+  if (!data) return null;
   try {
     return JSON.parse(data);
   } catch {
-    return LOCAL_DEMO;
+    return null;
   }
 }
 
 export async function logoutLocal(): Promise<void> {
+  localStorage.removeItem(STORAGE_KEYS.TOKEN);
   localStorage.removeItem(STORAGE_KEYS.SESSION);
+  idRecepcionActual = null;
 }
 
 /**
- * Obtener la lista de lo esperado HOY (calculado por servidor)
+ * Iniciar una recepción nueva: crea la cabecera en el servidor y devuelve
+ * lo esperado hoy para este cliente (calculado desde g360.f_ventas).
  */
-export async function getEsperadosHoy(): Promise<ItemEsperado[]> {
-  await simulateLatency(200);
-  const localSaved = localStorage.getItem(STORAGE_KEYS.ESPERADOS);
-  if (localSaved) {
-    try {
-      return JSON.parse(localSaved);
-    } catch {
-      // fallback
-    }
-  }
-  return ESPERADOS_HOY_MOCK;
+export async function iniciarRecepcion(): Promise<ItemEsperado[]> {
+  const data = await apiFetch('/api/recepciones', { method: 'POST' });
+  idRecepcionActual = data.idRecepcion;
+  return (data.esperado || []).map((e: any) => ({
+    idProd: e.idProd,
+    nombreProducto: e.nombreProducto || e.idProd,
+    categoria: null,
+    partida: e.partida,
+    cantidad: e.cantidad,
+    venc: e.venc,
+  }));
 }
 
 /**
- * Obtener catálogo completo de productos para Carga Manual
+ * Catálogo de productos para el buscador de Carga Manual.
  */
-export async function getCatalogoProductos() {
-  await simulateLatency(100);
-  return CATALOGO_PRODUCTOS;
+export async function getCatalogoProductos(): Promise<
+  Array<{ idProd: string; nombreProducto: string; categoria: string | null }>
+> {
+  const data = await apiFetch('/api/productos');
+  return data.productos || [];
 }
 
 /**
- * Obtener historial de recepciones finalizadas
+ * Historial de recepciones finalizadas. El backend todavía no expone un
+ * endpoint de historial (fuera de alcance de este módulo) — devuelve vacío.
  */
 export async function getHistorialRecepciones(): Promise<RecepcionGuardada[]> {
-  await simulateLatency(150);
-  const data = localStorage.getItem(STORAGE_KEYS.HISTORIAL);
-  if (data) {
-    try {
-      return JSON.parse(data);
-    } catch {
-      // fallback
-    }
-  }
-  return HISTORIAL_MOCK;
+  return [];
 }
 
-/**
- * Decodificar y procesar un código QR de fábrica
- * Formato esperado en QR: "idProd|partida|venc|nombre" o JSON o string simple
- */
-export function decodificarQR(qrDataRaw: string): {
-  idProd: string;
-  partida: string | null;
-  venc: string | null;
-  nombreProducto: string;
-} {
-  const raw = qrDataRaw.trim();
-
-  // Caso 1: Delimitado por tuberías |
-  if (raw.includes('|')) {
-    const parts = raw.split('|');
-    return {
-      idProd: parts[0] || 'PT-HEL-DESCONOCIDO',
-      partida: parts[1] || 'L-' + new Date().toISOString().slice(0, 10).replace(/-/g, ''),
-      venc: parts[2] || null,
-      nombreProducto: parts[3] || 'Helado Artesanal Sabor no especificado',
-    };
-  }
-
-  // Caso 2: Intento parseo JSON
-  if (raw.startsWith('{') && raw.endsWith('}')) {
-    try {
-      const parsed = JSON.parse(raw);
-      return {
-        idProd: parsed.idProd || parsed.codigo || 'PT-HEL-999',
-        partida: parsed.partida || parsed.lote || null,
-        venc: parsed.venc || parsed.vencimiento || null,
-        nombreProducto: parsed.nombreProducto || parsed.nombre || 'Producto Escaneado',
-      };
-    } catch {
-      // continuar
-    }
-  }
-
-  // Caso 3: Es solo un ID de producto de catálogo
-  const prodEncontrado = CATALOGO_PRODUCTOS.find(p => p.idProd === raw || p.nombreProducto.toLowerCase().includes(raw.toLowerCase()));
-  if (prodEncontrado) {
-    return {
-      idProd: prodEncontrado.idProd,
-      partida: 'L-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-QR',
-      venc: '2026-11-30',
-      nombreProducto: prodEncontrado.nombreProducto,
-    };
-  }
-
-  // Caso genérico fallback
+function mapEscaneoResponse(data: any): ItemEscaneado {
   return {
-    idProd: 'PT-DES-000',
-    partida: 'PARTIDA-QR-' + Math.floor(Math.random() * 8999 + 1000),
-    venc: '2026-12-31',
-    nombreProducto: `Ítem Fábrica (${raw.slice(0, 24)})`,
+    id: String(data.idLote),
+    idProd: data.idProd,
+    nombreProducto: data.nombreProducto || data.idProd,
+    partida: data.partida ?? null,
+    cantidad: data.cantidad,
+    venc: data.venc ?? null,
+    origenCarga: data.origenCarga,
+    matched: Boolean(data.matched),
+    timestamp: new Date().toLocaleTimeString().slice(0, 5),
   };
 }
 
 /**
- * Enviar / Guardar la Recepción Finalizada
+ * Registrar un escaneo de QR de fábrica. El texto crudo se manda tal cual al
+ * servidor — el parseo de partida/producto/cantidad ocurre del lado del
+ * servidor (src/qr.js en el backend), no acá.
+ */
+export async function registrarEscaneoQr(qrRawText: string): Promise<ItemEscaneado> {
+  if (idRecepcionActual === null) {
+    throw new Error('No hay una recepción en curso.');
+  }
+  const data = await apiFetch(`/api/recepciones/${idRecepcionActual}/escaneos`, {
+    method: 'POST',
+    body: JSON.stringify({ raw: qrRawText }),
+  });
+  return mapEscaneoResponse(data);
+}
+
+/**
+ * Registrar una carga manual (insumos sin QR de fábrica).
+ */
+export async function registrarCargaManual(dataManual: {
+  idProd: string;
+  cantidad: number;
+  venc: string | null;
+}): Promise<ItemEscaneado> {
+  if (idRecepcionActual === null) {
+    throw new Error('No hay una recepción en curso.');
+  }
+  const data = await apiFetch(`/api/recepciones/${idRecepcionActual}/escaneos`, {
+    method: 'POST',
+    body: JSON.stringify({ manual: dataManual }),
+  });
+  return mapEscaneoResponse(data);
+}
+
+/**
+ * Finalizar la recepción en curso. El servidor recalcula los reclamos desde
+ * cero a partir de lo realmente persistido (no de lo que mande el cliente),
+ * y cierra la recepción. Los totales del resumen se calculan acá a partir de
+ * lo que el cliente ya sabe (cada escaneo fue confirmado por el servidor al
+ * agregarse), para no duplicar la lógica de matching del backend.
  */
 export async function enviarRecepcionFinalizada(
   esperados: ItemEsperado[],
   escaneados: ItemEscaneado[],
   nombreLocal: string
 ): Promise<{ ok: boolean; recepcion: RecepcionGuardada }> {
-  await simulateLatency(300);
+  if (idRecepcionActual === null) {
+    throw new Error('No hay una recepción en curso.');
+  }
 
-  // Calcular discrepancias y reclamos automáticamente
-  const reclamos: Reclamo[] = [];
+  const idRecepcionCerrada = idRecepcionActual;
+  const data = await apiFetch(`/api/recepciones/${idRecepcionCerrada}/finalizar`, {
+    method: 'POST',
+  });
+  idRecepcionActual = null;
+
+  const reclamos: Reclamo[] = (data.reclamos || []).map((r: any) => ({
+    tipo: r.tipo,
+    idProd: r.idProd,
+    nombreProducto: r.nombreProducto || r.idProd,
+    partida: r.partida ?? null,
+    detalle: r.detalle,
+  }));
+
   let totalRecibidosOk = 0;
-  let totalFaltantes = 0;
-  let totalSinCobrar = 0;
-
-  // 1. Analizar esperados
-  esperados.forEach(esp => {
+  esperados.forEach((esp) => {
     const sumEscaneado = escaneados
-      .filter(esc => esc.idProd === esp.idProd)
-      .reduce((acc, current) => acc + current.cantidad, 0);
-
-    if (sumEscaneado === 0) {
-      totalFaltantes += esp.cantidad;
-      reclamos.push({
-        tipo: 'faltante',
-        idProd: esp.idProd,
-        nombreProducto: esp.nombreProducto,
-        partida: esp.partida,
-        detalle: `Faltante total: se esperaban ${esp.cantidad} u., llegaron 0 u.`,
-      });
-    } else if (sumEscaneado < esp.cantidad) {
-      const dif = esp.cantidad - sumEscaneado;
-      totalFaltantes += dif;
-      reclamos.push({
-        tipo: 'faltante',
-        idProd: esp.idProd,
-        nombreProducto: esp.nombreProducto,
-        partida: esp.partida,
-        detalle: `Entrega incompleta: esperados ${esp.cantidad} u., recibidos ${sumEscaneado} u. (faltan ${dif} u.)`,
-      });
-      totalRecibidosOk += sumEscaneado;
-    } else {
-      totalRecibidosOk += esp.cantidad; // llegó completo
-    }
+      .filter((esc) => esc.idProd === esp.idProd)
+      .reduce((acc, cur) => acc + cur.cantidad, 0);
+    totalRecibidosOk += Math.min(sumEscaneado, esp.cantidad);
   });
 
-  // 2. Analizar escaneados no esperados ("sin cobrar / extra")
-  escaneados.forEach(esc => {
-    if (!esc.matched) {
-      totalSinCobrar += esc.cantidad;
-      reclamos.push({
-        tipo: 'sin_cobrar',
-        idProd: esc.idProd,
-        nombreProducto: esc.nombreProducto,
-        partida: esc.partida,
-        detalle: `Producto no figuraba en pedido del día: recibido ${esc.cantidad} u. (${esc.origenCarga === 'qr' ? 'Escaneo QR' : 'Carga manual'}).`,
-      });
-    }
-  });
+  const totalEsperados = esperados.reduce((acc, e) => acc + e.cantidad, 0);
+  const totalFaltantes = Math.max(0, totalEsperados - totalRecibidosOk);
+  const totalSinCobrar = escaneados
+    .filter((e) => !e.matched)
+    .reduce((acc, e) => acc + e.cantidad, 0);
 
   const now = new Date();
-  const nuevaRecepcion: RecepcionGuardada = {
-    id: `REC-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${Math.floor(Math.random() * 899 + 100)}`,
+  const recepcion: RecepcionGuardada = {
+    id: `REC-${idRecepcionCerrada}`,
     fecha: now.toISOString().slice(0, 10),
     hora: now.toTimeString().slice(0, 5),
-    totalesperados: esperados.reduce((a, b) => a + b.cantidad, 0),
+    totalesperados: totalEsperados,
     totalRecibidosOk,
     totalFaltantes,
     totalSinCobrar,
@@ -236,10 +235,5 @@ export async function enviarRecepcionFinalizada(
     usuarioLocal: nombreLocal,
   };
 
-  // Guardar en historial local para persistencia entre vistas
-  const historialActual = await getHistorialRecepciones();
-  const actualizado = [nuevaRecepcion, ...historialActual];
-  localStorage.setItem(STORAGE_KEYS.HISTORIAL, JSON.stringify(actualizado));
-
-  return { ok: true, recepcion: nuevaRecepcion };
+  return { ok: true, recepcion };
 }

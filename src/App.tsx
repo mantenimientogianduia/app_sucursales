@@ -8,9 +8,11 @@ import {
 import {
   getSesionActual,
   logoutLocal,
-  getEsperadosHoy,
-  decodificarQR,
-  enviarRecepcionFinalizada
+  iniciarRecepcion,
+  registrarEscaneoQr,
+  registrarCargaManual,
+  enviarRecepcionFinalizada,
+  getCatalogoProductos
 } from './services/apiService';
 import { LoginScreen } from './components/LoginScreen';
 import { HomeScreen } from './components/HomeScreen';
@@ -29,6 +31,12 @@ export default function App() {
   const [esperados, setEsperados] = useState<ItemEsperado[]>([]);
   const [escaneados, setEscaneados] = useState<ItemEscaneado[]>([]);
   const [recepcionFinal, setRecepcionFinal] = useState<RecepcionGuardada | null>(null);
+
+  // Catálogo de productos para la carga manual (Carga Manual busca acá)
+  const [productos, setProductos] = useState<
+    Array<{ idProd: string; nombreProducto: string; categoria: string | null }>
+  >([]);
+  const [cargandoProductos, setCargandoProductos] = useState(false);
 
   // Estado Modales
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -61,114 +69,76 @@ export default function App() {
     setPantalla('login');
   };
 
-  // Iniciar una nueva recepción
+  // Iniciar una nueva recepción: la crea en el servidor y trae lo esperado hoy
   const handleIniciarRecepcion = async () => {
-    const dataEsperados = await getEsperadosHoy();
-    setEsperados(dataEsperados);
-    setEscaneados([]);
-    setRecepcionFinal(null);
-    setPantalla('checklist');
+    try {
+      const dataEsperados = await iniciarRecepcion();
+      setEsperados(dataEsperados);
+      setEscaneados([]);
+      setRecepcionFinal(null);
+      setPantalla('checklist');
+
+      setCargandoProductos(true);
+      getCatalogoProductos()
+        .then(setProductos)
+        .catch(() => setProductos([]))
+        .finally(() => setCargandoProductos(false));
+    } catch (err: any) {
+      alert(err.message || 'No se pudo iniciar la recepción.');
+    }
   };
 
-  // Agregar un item escaneado / capturado
+  // Agregar un item ya confirmado por el servidor a la lista visual.
+  // Cada captura es una fila propia (una partida fisica = un escaneo), no se
+  // agrupan/suman en el cliente para no perder la trazabilidad 1:1 con el
+  // servidor.
   const handleAgregarEscaneo = (nuevoItem: ItemEscaneado) => {
-    // Si ya existe este producto con origen idéntico y partida idéntica, incrementamos
-    setEscaneados((prev) => {
-      const indexExistente = prev.findIndex(
-        (i) => i.idProd === nuevoItem.idProd && i.partida === nuevoItem.partida
-      );
-
-      if (indexExistente >= 0) {
-        const copy = [...prev];
-        copy[indexExistente] = {
-          ...copy[indexExistente],
-          cantidad: copy[indexExistente].cantidad + nuevoItem.cantidad,
-          timestamp: nuevoItem.timestamp,
-        };
-        return copy;
-      }
-      return [nuevoItem, ...prev];
-    });
+    setEscaneados((prev) => [nuevoItem, ...prev]);
   };
 
-  // Modificar cantidad de un escaneo existente
-  const handleActualizarCantidadEscaneado = (id: string, delta: number) => {
-    setEscaneados((prev) =>
-      prev
-        .map((item) => {
-          if (item.id === id) {
-            const nuevaCant = item.cantidad + delta;
-            return nuevaCant > 0 ? { ...item, cantidad: nuevaCant } : null;
-          }
-          return item;
-        })
-        .filter((i): i is ItemEscaneado => i !== null)
-    );
-  };
-
-  // Eliminar un escaneo
-  const handleEliminarEscaneado = (id: string) => {
-    setEscaneados((prev) => prev.filter((i) => i.id !== id));
-  };
-
-  // Procesar resultado de escáner QR de cámara o simulador
-  const handleScanResult = (qrRawText: string) => {
+  // Procesar resultado de escáner QR de cámara o simulador: el texto crudo se
+  // manda al servidor, que decodifica la partida y decide si matchea.
+  const handleScanResult = async (qrRawText: string) => {
     setIsScannerOpen(false);
-
-    const decoded = decodificarQR(qrRawText);
-    const espMatch = esperados.find((e) => e.idProd === decoded.idProd);
-
-    const nuevoEscaneo: ItemEscaneado = {
-      id: 'ESC-' + Date.now() + '-' + Math.floor(Math.random() * 899 + 100),
-      idProd: decoded.idProd,
-      nombreProducto: decoded.nombreProducto,
-      partida: decoded.partida,
-      venc: decoded.venc,
-      cantidad: 1,
-      origenCarga: 'qr',
-      matched: Boolean(espMatch),
-      timestamp: new Date().toLocaleTimeString().slice(0, 5),
-    };
-
-    handleAgregarEscaneo(nuevoEscaneo);
+    try {
+      const nuevoEscaneo = await registrarEscaneoQr(qrRawText);
+      handleAgregarEscaneo(nuevoEscaneo);
+    } catch (err: any) {
+      alert(err.message || 'No se pudo registrar el escaneo.');
+    }
   };
 
-  // Procesar submit de carga manual
-  const handleSubmitManual = (dataManual: {
+  // Procesar submit de carga manual: se manda al servidor, no se decide nada
+  // del lado del cliente.
+  const handleSubmitManual = async (dataManual: {
     idProd: string;
     nombreProducto: string;
     cantidad: number;
-    partida: string | null;
     venc: string | null;
   }) => {
-    const espMatch = esperados.find((e) => e.idProd === dataManual.idProd);
-
-    const nuevoEscaneo: ItemEscaneado = {
-      id: 'MAN-' + Date.now() + '-' + Math.floor(Math.random() * 899 + 100),
-      idProd: dataManual.idProd,
-      nombreProducto: dataManual.nombreProducto,
-      partida: dataManual.partida,
-      venc: dataManual.venc,
-      cantidad: dataManual.cantidad,
-      origenCarga: 'manual',
-      matched: Boolean(espMatch),
-      timestamp: new Date().toLocaleTimeString().slice(0, 5),
-    };
-
-    handleAgregarEscaneo(nuevoEscaneo);
+    try {
+      const nuevoEscaneo = await registrarCargaManual({
+        idProd: dataManual.idProd,
+        cantidad: dataManual.cantidad,
+        venc: dataManual.venc,
+      });
+      handleAgregarEscaneo(nuevoEscaneo);
+    } catch (err: any) {
+      alert(err.message || 'No se pudo registrar la carga manual.');
+    }
   };
 
   // Finalizar Recepción
   const handleFinalizarRecepcion = async () => {
     if (!local) return;
-    const res = await enviarRecepcionFinalizada(
-      esperados,
-      escaneados,
-      local.nombreLocal
-    );
-    if (res.ok) {
-      setRecepcionFinal(res.recepcion);
-      setPantalla('resumen');
+    try {
+      const res = await enviarRecepcionFinalizada(esperados, escaneados, local.nombreLocal);
+      if (res.ok) {
+        setRecepcionFinal(res.recepcion);
+        setPantalla('resumen');
+      }
+    } catch (err: any) {
+      alert(err.message || 'No se pudo finalizar la recepción.');
     }
   };
 
@@ -193,9 +163,6 @@ export default function App() {
         <ChecklistScreen
           esperados={esperados}
           escaneados={escaneados}
-          onAgregarEscaneo={handleAgregarEscaneo}
-          onActualizarCantidadEscaneado={handleActualizarCantidadEscaneado}
-          onEliminarEscaneado={handleEliminarEscaneado}
           onOpenScanner={() => setIsScannerOpen(true)}
           onOpenManual={() => setIsManualOpen(true)}
           onFinalizar={handleFinalizarRecepcion}
@@ -222,6 +189,8 @@ export default function App() {
         isOpen={isManualOpen}
         onClose={() => setIsManualOpen(false)}
         onSubmitManual={handleSubmitManual}
+        productos={productos}
+        cargandoProductos={cargandoProductos}
       />
     </div>
   );
