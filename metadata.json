@@ -1,0 +1,6 @@
+{
+  "name": "Recepción Heladería",
+  "description": "Herramienta móvil de recepción de mercadería para empleados de heladería artesanal",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
