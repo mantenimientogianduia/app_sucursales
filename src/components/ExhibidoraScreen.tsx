@@ -24,14 +24,18 @@ export const ExhibidoraScreen: React.FC<ExhibidoraScreenProps> = ({ onVolver, on
   const [bacha, setBacha] = useState<ExhibidoBacha[]>([]);
   const [resto, setResto] = useState<ExhibidoResto[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [seleccionado, setSeleccionado] = useState<{ idProd: string; nombre: string } | null>(null);
 
   const cargar = async () => {
     setCargando(true);
+    setError(null);
     try {
       const data = await getExhibidora();
       setBacha(data.bacha);
       setResto(data.resto);
+    } catch (err: any) {
+      setError(err.message || 'No se pudo cargar la exhibidora.');
     } finally {
       setCargando(false);
     }
@@ -51,6 +55,11 @@ export const ExhibidoraScreen: React.FC<ExhibidoraScreenProps> = ({ onVolver, on
       <TicketHeader eyebrow="Mostrador" title="Exhibidora" subtitle="Qué está exhibido en este local" />
 
       <div className="flex-1 px-4 pt-4">
+        {error && (
+          <div className="mb-4 p-3 bg-danger-tint border border-danger text-danger text-xs font-medium">
+            {error}
+          </div>
+        )}
         {cargando ? (
           <div className="py-16 text-center text-sm text-ink-soft">Cargando...</div>
         ) : (

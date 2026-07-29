@@ -59,6 +59,18 @@ export default function App() {
     };
   }, []);
 
+  // El servicio de API dispara este evento cuando el token vencio o dejo de
+  // ser valido (401) — volvemos a login en vez de dejar pantallas mostrando
+  // datos vacios enganosos.
+  useEffect(() => {
+    const handleSesionExpirada = () => {
+      setLocal(null);
+      setPantalla('login');
+    };
+    window.addEventListener('sesion-local-expirada', handleSesionExpirada);
+    return () => window.removeEventListener('sesion-local-expirada', handleSesionExpirada);
+  }, []);
+
   // Handlers de navegación y autenticación
   const handleLoginSuccess = (localAuth: LocalUsuario) => {
     setLocal(localAuth);

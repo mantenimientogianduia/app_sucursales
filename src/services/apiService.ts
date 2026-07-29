@@ -45,6 +45,15 @@ async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
   const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
   const data = await res.json().catch(() => ({}));
 
+  if (res.status === 401 && token) {
+    // Token vencido o invalido: limpiar sesion y avisar a App.tsx para
+    // volver a la pantalla de login, en vez de dejar que cada pantalla
+    // muestre un estado vacio enganoso.
+    localStorage.removeItem(STORAGE_KEYS.TOKEN);
+    localStorage.removeItem(STORAGE_KEYS.SESSION);
+    window.dispatchEvent(new CustomEvent('sesion-local-expirada'));
+  }
+
   if (!res.ok) {
     throw new Error(data.error || `Error de red (${res.status})`);
   }

@@ -21,6 +21,12 @@ export default function AdminApp() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleSesionExpirada = () => setUsuario(null);
+    window.addEventListener('sesion-admin-expirada', handleSesionExpirada);
+    return () => window.removeEventListener('sesion-admin-expirada', handleSesionExpirada);
+  }, []);
+
   if (cargandoSesion) {
     return <div className="min-h-screen bg-paper" />;
   }

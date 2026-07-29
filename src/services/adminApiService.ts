@@ -36,6 +36,12 @@ async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
   const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
   const data = await res.json().catch(() => ({}));
 
+  if (res.status === 401 && token) {
+    localStorage.removeItem(STORAGE_KEYS.TOKEN);
+    localStorage.removeItem(STORAGE_KEYS.SESSION);
+    window.dispatchEvent(new CustomEvent('sesion-admin-expirada'));
+  }
+
   if (!res.ok) {
     throw new Error(data.error || `Error de red (${res.status})`);
   }

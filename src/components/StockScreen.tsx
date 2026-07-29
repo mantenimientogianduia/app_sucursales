@@ -55,6 +55,8 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
     setCargando(true);
     try {
       setFamilias(await getFamiliasConStock());
+    } catch (err: any) {
+      setMensaje({ texto: err.message || 'No se pudo cargar el stock.', ok: false });
     } finally {
       setCargando(false);
     }
