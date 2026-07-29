@@ -58,23 +58,17 @@ export type RecepcionGuardada = {
 
 /* ---------------------- Stock / Exhibidora ---------------------- */
 
-export type FamiliaConStock = {
-  familia: string | null;
-  cantidadProductos: number;
-};
-
-export type ProductoConStock = {
+// Partida sin exhibir con su producto/familia embebidos, para el buscador
+// plano de Stock (una sola lista filtrable por texto + familia).
+export type PartidaConStock = {
+  idLote: number | string;
   idProd: string;
   nombreProducto: string;
   familia: string | null;
-  partidasDisponibles: number;
-};
-
-export type PartidaDisponible = {
-  idLote: number | string;
   partida: string | null;
   cantidad: number | null;
   venc: string | null;
+  fechaFabricacion: string | null;
   timestampRecep: string;
   origenCarga: string;
   esFifo: boolean;

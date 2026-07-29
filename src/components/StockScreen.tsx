@@ -1,13 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronRight, PackageSearch, Boxes, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
-import { FamiliaConStock, ProductoConStock, PartidaDisponible } from '../types';
-import {
-  getFamiliasConStock,
-  getProductosConStock,
-  getPartidasDisponibles,
-  exhibirLote,
-} from '../services/apiService';
+import { Search, X, Boxes, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
+import { PartidaConStock } from '../types';
+import { getPartidasConStock, exhibirLote } from '../services/apiService';
 import { TicketHeader } from './ui/TicketHeader';
 import { AppShell, AreaPrincipal } from './ui/AppShell';
 import { Stamp } from './ui/Stamp';
@@ -17,7 +12,8 @@ interface StockScreenProps {
   onIrAExhibidora: () => void;
 }
 
-type Nivel = 'familias' | 'productos' | 'partidas';
+const TODAS = 'todas';
+const SIN_FAMILIA = 'sin-familia';
 
 function formatFecha(iso: string | null): string {
   if (!iso) return '—';
@@ -27,21 +23,17 @@ function formatFecha(iso: string | null): string {
 }
 
 export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibidora }) => {
-  const [nivel, setNivel] = useState<Nivel>('familias');
+  const [partidas, setPartidas] = useState<PartidaConStock[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [busqueda, setBusqueda] = useState('');
+  const [filtroFamilia, setFiltroFamilia] = useState<string>(TODAS);
 
-  const [familias, setFamilias] = useState<FamiliaConStock[]>([]);
-  const [familiaActiva, setFamiliaActiva] = useState<FamiliaConStock | null>(null);
-  const [productos, setProductos] = useState<ProductoConStock[]>([]);
-  const [productoActivo, setProductoActivo] = useState<ProductoConStock | null>(null);
-  const [partidas, setPartidas] = useState<PartidaDisponible[]>([]);
-
-  const [confirmandoLote, setConfirmandoLote] = useState<PartidaDisponible | null>(null);
+  const [confirmandoLote, setConfirmandoLote] = useState<PartidaConStock | null>(null);
   const [exhibiendoId, setExhibiendoId] = useState<string | number | null>(null);
   const [mensaje, setMensaje] = useState<{ texto: string; ok: boolean } | null>(null);
 
   useEffect(() => {
-    cargarFamilias();
+    cargar();
   }, []);
 
   useEffect(() => {
@@ -51,10 +43,10 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
     }
   }, [mensaje]);
 
-  const cargarFamilias = async () => {
+  const cargar = async () => {
     setCargando(true);
     try {
-      setFamilias(await getFamiliasConStock());
+      setPartidas(await getPartidasConStock());
     } catch (err: any) {
       setMensaje({ texto: err.message || 'No se pudo cargar el stock.', ok: false });
     } finally {
@@ -62,48 +54,47 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
     }
   };
 
-  const abrirFamilia = async (f: FamiliaConStock) => {
-    setFamiliaActiva(f);
-    setNivel('productos');
-    setCargando(true);
-    try {
-      setProductos(await getProductosConStock(f.familia ? { familia: f.familia } : { sinFamilia: true }));
-    } finally {
-      setCargando(false);
+  const familias = useMemo(() => {
+    const conteo = new Map<string, number>();
+    let sinFamiliaCount = 0;
+    for (const p of partidas) {
+      if (p.familia) conteo.set(p.familia, (conteo.get(p.familia) || 0) + 1);
+      else sinFamiliaCount += 1;
     }
-  };
-
-  const abrirProducto = async (p: ProductoConStock) => {
-    setProductoActivo(p);
-    setNivel('partidas');
-    setCargando(true);
-    try {
-      setPartidas(await getPartidasDisponibles(p.idProd));
-    } finally {
-      setCargando(false);
+    const lista = [...conteo.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([familia, count]) => ({ valor: familia, label: familia, count }));
+    if (sinFamiliaCount > 0) {
+      lista.push({ valor: SIN_FAMILIA, label: 'Sin familia', count: sinFamiliaCount });
     }
-  };
+    return [{ valor: TODAS, label: 'Todas', count: partidas.length }, ...lista];
+  }, [partidas]);
 
-  const recargarPartidas = async () => {
-    if (!productoActivo) return;
-    setPartidas(await getPartidasDisponibles(productoActivo.idProd));
-  };
+  const resultados = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    return partidas.filter((p) => {
+      if (filtroFamilia === SIN_FAMILIA && p.familia !== null) return false;
+      if (filtroFamilia !== TODAS && filtroFamilia !== SIN_FAMILIA && p.familia !== filtroFamilia) return false;
+      if (q && !p.nombreProducto.toLowerCase().includes(q) && !p.idProd.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [partidas, busqueda, filtroFamilia]);
 
-  const solicitarExhibir = (lote: PartidaDisponible) => {
-    if (!lote.esFifo && partidas.some((p) => p.esFifo)) {
+  const solicitarExhibir = (lote: PartidaConStock) => {
+    if (!lote.esFifo) {
       setConfirmandoLote(lote);
       return;
     }
     ejecutarExhibir(lote);
   };
 
-  const ejecutarExhibir = async (lote: PartidaDisponible) => {
+  const ejecutarExhibir = async (lote: PartidaConStock) => {
     setConfirmandoLote(null);
     setExhibiendoId(lote.idLote);
     try {
       await exhibirLote(lote.idLote);
-      setMensaje({ texto: `Exhibida: ${productoActivo?.nombreProducto}`, ok: true });
-      await recargarPartidas();
+      setMensaje({ texto: `Exhibida: ${lote.nombreProducto}`, ok: true });
+      setPartidas((prev) => prev.filter((p) => p.idLote !== lote.idLote));
     } catch (err: any) {
       setMensaje({ texto: err.message || 'No se pudo exhibir la partida.', ok: false });
     } finally {
@@ -116,33 +107,12 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
     if (area === 'exhibidora') onIrAExhibidora();
   };
 
-  const volverAtras = () => {
-    if (nivel === 'partidas') {
-      setNivel('productos');
-      setProductoActivo(null);
-      setPartidas([]);
-    } else if (nivel === 'productos') {
-      setNivel('familias');
-      setFamiliaActiva(null);
-      setProductos([]);
-    }
-  };
-
   return (
     <AppShell activa="stock" onNavegar={handleNav}>
       <TicketHeader
         eyebrow="Depósito"
-        title={
-          nivel === 'familias' ? 'Stock disponible' : nivel === 'productos' ? (familiaActiva?.familia || 'Sin familia') : productoActivo?.nombreProducto || ''
-        }
-        subtitle={
-          nivel === 'familias'
-            ? 'Elegí una familia para ver los productos'
-            : nivel === 'productos'
-            ? `${productos.length} productos con stock`
-            : `${partidas.length} partidas sin exhibir`
-        }
-        onBack={nivel !== 'familias' ? volverAtras : undefined}
+        title="Buscar partida"
+        subtitle={cargando ? 'Cargando...' : `${resultados.length} de ${partidas.length} partidas`}
       />
 
       <AnimatePresence>
@@ -161,95 +131,103 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
         )}
       </AnimatePresence>
 
-      <div className="flex-1 px-4 md:px-6 pt-3">
-        {cargando ? (
-          <div className="py-16 text-center text-sm text-ink-soft">Cargando...</div>
-        ) : nivel === 'familias' ? (
-          familias.length === 0 ? (
-            <EmptyBlock icon={<Boxes className="w-8 h-8" />} texto="No hay stock sin exhibir en el depósito." />
+      <div className="px-4 md:px-6 pt-4 pb-2">
+        <div className="relative">
+          <Search className="w-4 h-4 text-ink-soft absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar producto por nombre..."
+            autoFocus
+            className="w-full h-12 pl-10 pr-10 bg-paper-raised border-2 border-ink/15 text-sm text-ink font-medium focus:border-terracotta focus:outline-none"
+          />
+          {busqueda && (
+            <button
+              onClick={() => setBusqueda('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft hover:text-ink cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="flex-1 px-4 md:px-6 pb-4 md:flex md:gap-6 md:items-start">
+        {/* FILTRO DE FAMILIA: chips horizontales en mobile, columna lateral desde md */}
+        <div className="flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-3 md:pb-0 md:w-52 md:shrink-0 -mx-4 px-4 md:mx-0 md:px-0">
+          {familias.map((f) => {
+            const activo = filtroFamilia === f.valor;
+            return (
+              <button
+                key={f.valor}
+                onClick={() => setFiltroFamilia(f.valor)}
+                className={`shrink-0 md:w-full px-3 py-2 text-xs font-ticket font-semibold text-left whitespace-nowrap md:whitespace-normal border transition-colors cursor-pointer flex items-center justify-between gap-3 ${
+                  activo
+                    ? 'bg-terracotta text-white border-terracotta'
+                    : 'bg-paper-raised text-ink-soft border-ink/15 hover:border-terracotta/50'
+                }`}
+              >
+                <span>{f.label}</span>
+                <span className={activo ? 'text-white/70' : 'text-ink-soft/50'}>{f.count}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* RESULTADOS */}
+        <div className="flex-1 min-w-0">
+          {cargando ? (
+            <div className="py-16 text-center text-sm text-ink-soft">Cargando...</div>
+          ) : resultados.length === 0 ? (
+            <EmptyBlock
+              icon={<Boxes className="w-8 h-8" />}
+              texto={
+                partidas.length === 0
+                  ? 'No hay stock sin exhibir en el depósito.'
+                  : 'Ningún resultado para esta búsqueda.'
+              }
+            />
           ) : (
-            <div className="sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-x-6">
-              {familias.map((f, i) => (
-                <button
-                  key={f.familia || 'sin-familia'}
-                  onClick={() => abrirFamilia(f)}
-                  className="list-row w-full py-3.5 flex items-center justify-between text-left cursor-pointer group"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="font-ticket text-xs text-ink-soft/60 w-6 text-right shrink-0">
-                      {String(i + 1).padStart(2, '0')}
-                    </span>
-                    <span className="font-display font-bold text-base text-ink truncate">
-                      {f.familia || 'Sin familia'}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs font-ticket text-ink-soft">{f.cantidadProductos} prod.</span>
-                    <ChevronRight className="w-4 h-4 text-ink-soft/50 group-hover:text-terracotta transition-colors" />
-                  </div>
-                </button>
-              ))}
-            </div>
-          )
-        ) : nivel === 'productos' ? (
-          productos.length === 0 ? (
-            <EmptyBlock icon={<PackageSearch className="w-8 h-8" />} texto="Sin productos en esta familia." />
-          ) : (
-            <div className="sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-x-6">
-              {productos.map((p) => (
-                <button
-                  key={p.idProd}
-                  onClick={() => abrirProducto(p)}
-                  className="list-row w-full py-3.5 flex items-center justify-between text-left cursor-pointer group"
-                >
+            <div>
+              {resultados.map((lote) => (
+                <div key={lote.idLote} className="list-row py-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <span className="font-semibold text-sm text-ink block truncate">{p.nombreProducto}</span>
-                    <span className="text-[11px] font-ticket text-ink-soft">{p.idProd}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                      {lote.familia && (
+                        <span className="text-[9px] font-ticket font-semibold uppercase tracking-wider text-ink-soft bg-paper-sunken px-1.5 py-0.5">
+                          {lote.familia}
+                        </span>
+                      )}
+                      {lote.esFifo && <Stamp variant="sage">Más antigua</Stamp>}
+                    </div>
+                    <h4 className="text-sm font-semibold text-ink leading-snug truncate">
+                      {lote.nombreProducto}
+                    </h4>
+                    <div className="flex items-center gap-2.5 text-[11px] font-ticket text-ink-soft mt-0.5">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        fab {formatFecha(lote.fechaFabricacion || lote.timestampRecep)}
+                      </span>
+                      {lote.venc && <span>vence {formatFecha(lote.venc)}</span>}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Stamp variant="sage">{p.partidasDisponibles} part.</Stamp>
-                    <ChevronRight className="w-4 h-4 text-ink-soft/50 group-hover:text-terracotta transition-colors" />
+
+                  <div className="shrink-0 flex flex-col items-end gap-1.5">
+                    <span className="text-sm font-bold text-ink">{lote.cantidad ?? '—'} u.</span>
+                    <button
+                      onClick={() => solicitarExhibir(lote)}
+                      disabled={exhibiendoId === lote.idLote}
+                      className="btn-tactile h-10 px-3.5 bg-terracotta hover:bg-terracotta-dark text-white font-semibold text-xs cursor-pointer disabled:opacity-50"
+                    >
+                      {exhibiendoId === lote.idLote ? '...' : 'Exhibir'}
+                    </button>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
-          )
-        ) : partidas.length === 0 ? (
-          <EmptyBlock icon={<Boxes className="w-8 h-8" />} texto="No quedan partidas sin exhibir de este producto." />
-        ) : (
-          <div className="space-y-2.5 sm:space-y-0 sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-3 pb-4">
-            {partidas.map((lote) => (
-              <div key={lote.idLote} className="card-flat p-4 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  {lote.esFifo && (
-                    <div className="mb-1">
-                      <Stamp variant="sage">Más antigua</Stamp>
-                    </div>
-                  )}
-                  {lote.partida && (
-                    <span className="block text-[10px] font-ticket text-ink-soft/70 truncate max-w-[150px]" title={lote.partida}>
-                      {lote.partida}
-                    </span>
-                  )}
-                  <div className="flex items-center gap-3 text-xs font-ticket text-ink-soft mt-0.5">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> {formatFecha(lote.timestampRecep)}
-                    </span>
-                    {lote.venc && <span>vence {formatFecha(lote.venc)}</span>}
-                  </div>
-                  <span className="text-sm font-bold text-ink block mt-1">{lote.cantidad ?? '—'} u.</span>
-                </div>
-                <button
-                  onClick={() => solicitarExhibir(lote)}
-                  disabled={exhibiendoId === lote.idLote}
-                  className="btn-tactile shrink-0 h-12 px-4 bg-terracotta hover:bg-terracotta-dark text-white font-semibold text-xs cursor-pointer disabled:opacity-50"
-                >
-                  {exhibiendoId === lote.idLote ? 'Exhibiendo...' : 'Exhibir'}
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Confirmación de romper FIFO */}
@@ -267,7 +245,7 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
                 <h3 className="font-display font-bold text-lg text-ink">Hay una partida más antigua</h3>
               </div>
               <p className="text-sm text-ink-soft mb-4">
-                Esta no es la partida más vieja sin exhibir de este producto. ¿Exhibir esta igual?
+                Esta no es la partida más vieja sin exhibir de {confirmandoLote.nombreProducto}. ¿Exhibir esta igual?
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -294,6 +272,6 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
 const EmptyBlock: React.FC<{ icon: React.ReactNode; texto: string }> = ({ icon, texto }) => (
   <div className="py-16 flex flex-col items-center text-center text-ink-soft">
     <div className="mb-2 opacity-50">{icon}</div>
-    <p className="text-sm max-w-[220px]">{texto}</p>
+    <p className="text-sm max-w-[260px]">{texto}</p>
   </div>
 );

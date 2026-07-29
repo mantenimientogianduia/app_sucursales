@@ -4,9 +4,7 @@ import {
   Reclamo,
   LocalUsuario,
   RecepcionGuardada,
-  FamiliaConStock,
-  ProductoConStock,
-  PartidaDisponible,
+  PartidaConStock,
   ExhibidoBacha,
   ExhibidoResto,
   HistorialExhibicion
@@ -255,25 +253,11 @@ export async function enviarRecepcionFinalizada(
 
 /* ---------------------- Stock / Exhibidora ---------------------- */
 
-export async function getFamiliasConStock(): Promise<FamiliaConStock[]> {
-  const data = await apiFetch('/api/stock/familias');
-  return data.familias || [];
-}
-
-export async function getProductosConStock(opts: {
-  familia?: string;
-  sinFamilia?: boolean;
-}): Promise<ProductoConStock[]> {
-  const params = new URLSearchParams();
-  if (opts.sinFamilia) params.set('sinFamilia', 'true');
-  else if (opts.familia) params.set('familia', opts.familia);
-  const qs = params.toString();
-  const data = await apiFetch(`/api/stock/productos${qs ? `?${qs}` : ''}`);
-  return data.productos || [];
-}
-
-export async function getPartidasDisponibles(idProd: string): Promise<PartidaDisponible[]> {
-  const data = await apiFetch(`/api/stock/productos/${encodeURIComponent(idProd)}/partidas`);
+// Lista plana de todas las partidas sin exhibir del local, con producto y
+// familia embebidos — pensada para el buscador de Stock (filtra en el
+// cliente, sin ida y vuelta al servidor por cada tecla o click de filtro).
+export async function getPartidasConStock(): Promise<PartidaConStock[]> {
+  const data = await apiFetch('/api/stock/partidas');
   return data.partidas || [];
 }
 
