@@ -97,14 +97,20 @@ export default function App() {
   };
 
   // Procesar resultado de escáner QR de cámara o simulador: el texto crudo se
-  // manda al servidor, que decodifica la partida y decide si matchea.
-  const handleScanResult = async (qrRawText: string) => {
-    setIsScannerOpen(false);
+  // manda al servidor, que decodifica la partida y decide si matchea. No
+  // cierra el modal — el escaneo es continuo (pensado para 200/300 partidas
+  // seguidas), así que devuelve el resultado para que el modal muestre un
+  // feedback rápido sin interrumpir el flujo con un alert bloqueante.
+  const handleScanResult = async (
+    qrRawText: string
+  ): Promise<{ matched: boolean; nombreProducto: string } | null> => {
     try {
       const nuevoEscaneo = await registrarEscaneoQr(qrRawText);
       handleAgregarEscaneo(nuevoEscaneo);
+      return { matched: nuevoEscaneo.matched, nombreProducto: nuevoEscaneo.nombreProducto };
     } catch (err: any) {
-      alert(err.message || 'No se pudo registrar el escaneo.');
+      console.error('Error al registrar escaneo:', err.message);
+      return null;
     }
   };
 
@@ -177,11 +183,12 @@ export default function App() {
         />
       )}
 
-      {/* Modal Cáncer Cámara QR */}
+      {/* Modal Cámara QR — escaneo continuo, se cierra solo con "Listo" */}
       <CameraScannerModal
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
         onScanResult={handleScanResult}
+        totalEscaneados={escaneados.length}
       />
 
       {/* Modal Carga Manual */}

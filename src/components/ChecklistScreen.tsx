@@ -33,22 +33,29 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
   const [toastMsg, setToastMsg] = useState<{ text: string; type: 'match' | 'extra' } | null>(null);
   const cantidadAnteriorRef = useRef(escaneados.length);
 
+  // Cada partida es una unidad física propia: un esperado CON partida solo
+  // puede matchear contra un escaneo con esa MISMA partida exacta (igual que
+  // el backend). Si dos líneas esperadas comparten producto pero son
+  // partidas distintas, escanear una no puede tildar la otra.
+  // Un esperado SIN partida (insumos) sí se agrega por producto, pero solo
+  // contra capturas que tampoco tengan partida (o sea, cargadas a mano).
+  const capturasParaEsperado = (esp: ItemEsperado) =>
+    esp.partida
+      ? escaneados.filter(esc => esc.partida === esp.partida)
+      : escaneados.filter(esc => esc.idProd === esp.idProd && !esc.partida);
+
   // Calcular totales de progreso
   const totalEsperadosDistintos = esperados.length;
-  
+
   // Conteo de cuántos ítems esperados ya tienen al menos 1 unidad recibida o completa
   const esperadosCumplidosCount = esperados.filter(esp => {
-    const sum = escaneados
-      .filter(esc => esc.idProd === esp.idProd)
-      .reduce((a, b) => a + b.cantidad, 0);
+    const sum = capturasParaEsperado(esp).reduce((a, b) => a + b.cantidad, 0);
     return sum >= esp.cantidad;
   }).length;
 
   const totalUnidadesEsperadas = esperados.reduce((a, b) => a + b.cantidad, 0);
   const totalUnidadesRecibidasOk = esperados.reduce((acc, esp) => {
-    const sum = escaneados
-      .filter(esc => esc.idProd === esp.idProd)
-      .reduce((a, b) => a + b.cantidad, 0);
+    const sum = capturasParaEsperado(esp).reduce((a, b) => a + b.cantidad, 0);
     return acc + Math.min(sum, esp.cantidad);
   }, 0);
 
@@ -175,8 +182,9 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
         {/* Renderizado de ítems esperados */}
         <AnimatePresence>
           {esperados.map((esp, index) => {
-            // Unidades escaneadas asociadas
-            const escaneadosParaEsp = escaneados.filter(esc => esc.idProd === esp.idProd);
+            // Unidades escaneadas asociadas (por partida exacta, o por
+            // producto solo para los sin partida — ver capturasParaEsperado)
+            const escaneadosParaEsp = capturasParaEsperado(esp);
             const totalRecibido = escaneadosParaEsp.reduce((acc, curr) => acc + curr.cantidad, 0);
 
             const isCompleto = totalRecibido >= esp.cantidad;
@@ -189,7 +197,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
 
             return (
               <motion.div
-                key={esp.idProd}
+                key={`${esp.idProd}-${esp.partida || 'sin-partida'}-${index}`}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.25, delay: index * 0.04 }}

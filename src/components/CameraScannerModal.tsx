@@ -1,46 +1,93 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { X, Camera, Zap, AlertCircle, Sparkles, Check, RefreshCw } from 'lucide-react';
+import { X, Camera, Zap, AlertCircle, Sparkles, Check, CheckCircle2 } from 'lucide-react';
 import { PRESETS_QR_SIMULADOR } from '../data/mockData';
+
+type ResultadoEscaneo = { matched: boolean; nombreProducto: string } | null;
 
 interface CameraScannerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onScanResult: (qrRawText: string) => void;
+  onScanResult: (qrRawText: string) => Promise<ResultadoEscaneo>;
+  totalEscaneados: number;
 }
 
 export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
   isOpen,
   onClose,
-  onScanResult
+  onScanResult,
+  totalEscaneados,
 }) => {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [customQrInput, setCustomQrInput] = useState('');
   const [activeTab, setActiveTab] = useState<'camera' | 'simulador'>('camera');
-  
+  const [feedback, setFeedback] = useState<{ text: string; ok: boolean } | null>(null);
+
   const html5QrcodeRef = useRef<Html5Qrcode | null>(null);
+  // Evita procesar el mismo QR varias veces mientras sigue en cuadro y
+  // evita disparar un segundo escaneo mientras el anterior todavia esta
+  // esperando la respuesta del servidor.
+  const procesandoRef = useRef(false);
 
   useEffect(() => {
     if (!isOpen) {
       stopCamera();
       return;
     }
-
-    // Al abrir modal, intentar iniciar cámara en el div id="reader-container"
     startCamera();
-
     return () => {
       stopCamera();
     };
   }, [isOpen]);
+
+  const mostrarFeedback = (resultado: ResultadoEscaneo) => {
+    if (!resultado) {
+      setFeedback({ text: 'No se pudo registrar, reintentá', ok: false });
+    } else {
+      setFeedback({
+        text: resultado.matched ? `✓ ${resultado.nombreProducto}` : `⚠ NO ESPERADO: ${resultado.nombreProducto}`,
+        ok: resultado.matched,
+      });
+    }
+    window.setTimeout(() => setFeedback(null), 1100);
+  };
+
+  // Punto único de entrada para procesar un texto de QR, venga de la cámara
+  // real, de un preset del simulador, o del input manual. Pausa la cámara
+  // mientras espera al servidor y la retoma sola al terminar — así el
+  // operario no tiene que volver a abrir el escáner entre partida y partida.
+  const procesarQr = async (qrRawText: string) => {
+    if (procesandoRef.current) return;
+    procesandoRef.current = true;
+
+    if (html5QrcodeRef.current) {
+      try {
+        await html5QrcodeRef.current.pause(true);
+      } catch {
+        // si ya estaba pausada o no soporta pause, seguimos igual
+      }
+    }
+
+    const resultado = await onScanResult(qrRawText);
+    mostrarFeedback(resultado);
+
+    procesandoRef.current = false;
+    if (html5QrcodeRef.current) {
+      try {
+        html5QrcodeRef.current.resume();
+      } catch {
+        // si el modal se cerró mientras esperábamos, no hay nada que retomar
+      }
+    }
+  };
 
   const startCamera = async () => {
     setCameraError(null);
     setIsScanning(true);
 
     try {
-      // Breve timeout para asegurar que el DOM existe
       await new Promise((r) => setTimeout(r, 100));
 
       const element = document.getElementById('qr-reader-target');
@@ -55,9 +102,7 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
         { facingMode: 'environment' },
         config,
         (decodedText) => {
-          // Éxito en lectura de QR
-          stopCamera();
-          onScanResult(decodedText);
+          procesarQr(decodedText);
         },
         () => {
           // Ignorar frames sin QR
@@ -83,19 +128,18 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
       }
       html5QrcodeRef.current = null;
     }
+    procesandoRef.current = false;
     setIsScanning(false);
   };
 
   const handleSimularPreset = (qrString: string) => {
-    stopCamera();
-    onScanResult(qrString);
+    procesarQr(qrString);
   };
 
   const handleSimularCustom = (e: React.FormEvent) => {
     e.preventDefault();
     if (!customQrInput.trim()) return;
-    stopCamera();
-    onScanResult(customQrInput.trim());
+    procesarQr(customQrInput.trim());
     setCustomQrInput('');
   };
 
@@ -113,7 +157,7 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
             <h3 className="text-base font-serif font-bold text-white leading-none">
               Escanear QR de Fábrica
             </h3>
-            <span className="text-xs text-[#D5C4B1]">Lote y Partida de Balde / Pote</span>
+            <span className="text-xs text-[#D5C4B1]">{totalEscaneados} escaneadas en esta recepción</span>
           </div>
         </div>
 
@@ -123,9 +167,28 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
           className="btn-tactile px-4 h-12 bg-[#3B2417] hover:bg-[#4A2F1E] text-[#E8DDD0] rounded-2xl border border-[#523725] font-semibold text-sm flex items-center space-x-1.5 cursor-pointer"
         >
           <X className="w-5 h-5 text-[#C1502E]" />
-          <span>Cancelar</span>
+          <span>Listo</span>
         </button>
       </div>
+
+      {/* FEEDBACK RÁPIDO, NO BLOQUEANTE — la cámara sigue activa detrás */}
+      <AnimatePresence>
+        {feedback && (
+          <motion.div
+            initial={{ opacity: 0, y: -16, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -16, scale: 0.96 }}
+            className={`fixed top-24 left-4 right-4 z-40 p-3 rounded-2xl shadow-xl text-xs font-bold text-white flex items-center justify-between border ${
+              feedback.ok
+                ? 'bg-[#1E5128] border-green-400 shadow-green-950/30'
+                : 'bg-[#B91C1C] border-red-400 shadow-red-950/30'
+            }`}
+          >
+            <span className="truncate pr-2">{feedback.text}</span>
+            <CheckCircle2 className="w-5 h-5 shrink-0" />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Switcher Modo Cámara vs Simulador */}
       <div className="bg-[#28180E] px-4 py-2 flex border-b border-[#3B2417] shrink-0">
@@ -181,7 +244,7 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
             </div>
 
             <p className="text-center text-xs text-[#D5C4B1] mt-4 max-w-xs">
-              Apuntá la cámara al código QR impreso en la etiqueta de la caja o balde de helado.
+              Apuntá y escaneá seguido — cada lectura se registra sola y la cámara sigue activa para la próxima partida.
             </p>
 
             {cameraError && (
