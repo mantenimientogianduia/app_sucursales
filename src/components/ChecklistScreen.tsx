@@ -96,7 +96,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
               Progreso de Recepción
             </span>
             <div className="flex items-baseline space-x-1.5">
-              <span className="text-2xl font-serif font-bold text-white">
+              <span className="text-2xl font-display font-bold text-white">
                 {esperadosCumplidosCount} de {totalEsperadosDistintos}
               </span>
               <span className="text-xs text-[#C5B4A3]">esperados listos</span>
@@ -104,7 +104,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
           </div>
 
           <div className="text-right">
-            <span className="text-xl font-bold font-serif text-[#C1502E]">
+            <span className="text-xl font-bold font-display text-[#C1502E]">
               {porcentajeProgreso}%
             </span>
             <span className="block text-[10px] text-[#C5B4A3]">
@@ -282,7 +282,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
           <div className="pt-4 border-t-2 border-dashed border-[#B91C1C]/40 space-y-3">
             <div className="flex items-center space-x-2 px-1">
               <AlertTriangle className="w-5 h-5 text-[#B91C1C]" />
-              <h4 className="text-sm font-serif font-bold text-[#B91C1C] uppercase tracking-wider">
+              <h4 className="text-sm font-display font-bold text-[#B91C1C] uppercase tracking-wider">
                 Ítems No Esperados / Sin Cobrar ({escaneados.filter(e => !e.matched).length})
               </h4>
             </div>

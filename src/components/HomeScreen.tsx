@@ -54,7 +54,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <span className="text-xs uppercase tracking-wider font-semibold text-[#8C715F]">
                 {local.sucursalCodigo}
               </span>
-              <h2 className="text-lg font-serif font-bold text-[#3B2417] leading-snug">
+              <h2 className="text-lg font-display font-bold text-[#3B2417] leading-snug">
                 Hola, {local.nombreLocal}
               </h2>
               <p className="text-xs text-[#785E4E]">{local.direccion}</p>
@@ -80,7 +80,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <PackagePlus className="w-8 h-8 text-white" />
             </div>
             <div>
-              <span className="block text-2xl font-serif font-bold tracking-tight">
+              <span className="block text-2xl font-display font-bold tracking-tight">
                 Iniciar recepción de hoy
               </span>
               <span className="text-xs text-white/80 font-medium">
@@ -145,7 +145,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   </div>
 
                   <div className="text-right pl-2">
-                    <span className="text-xs font-serif font-bold text-[#3B2417] block">
+                    <span className="text-xs font-display font-bold text-[#3B2417] block">
                       {rec.id}
                     </span>
                     <ChevronRight className="w-4 h-4 text-[#8C715F] ml-auto mt-1" />

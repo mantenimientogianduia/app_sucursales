@@ -74,7 +74,7 @@ Firmado digitalmente por el local.
           <span className="block text-xs font-semibold uppercase tracking-widest text-[#785E4E]">
             Comprobante de Recepción
           </span>
-          <h2 className="text-2xl font-serif font-bold text-[#3B2417] mt-1">
+          <h2 className="text-2xl font-display font-bold text-[#3B2417] mt-1">
             Recepción Finalizada
           </h2>
           <p className="text-xs text-[#61493B] mt-1">
@@ -92,7 +92,7 @@ Firmado digitalmente por el local.
               <span className="text-xs uppercase tracking-wider font-bold text-[#1E5128]">
                 Recibido Conforme
               </span>
-              <h3 className="text-xl font-serif font-bold text-[#1E5128]">
+              <h3 className="text-xl font-display font-bold text-[#1E5128]">
                 {recepcion.totalRecibidosOk} unidades OK
               </h3>
             </div>
@@ -120,7 +120,7 @@ Firmado digitalmente por el local.
               }`}>
                 Faltantes
               </span>
-              <h3 className={`text-xl font-serif font-bold ${
+              <h3 className={`text-xl font-display font-bold ${
                 faltantes.length > 0 ? 'text-[#B91C1C]' : 'text-[#3B2417]'
               }`}>
                 {recepcion.totalFaltantes} unidades no llegaron
@@ -162,7 +162,7 @@ Firmado digitalmente por el local.
               }`}>
                 Sin Cobrar / Insumos Extra
               </span>
-              <h3 className={`text-xl font-serif font-bold ${
+              <h3 className={`text-xl font-display font-bold ${
                 sinCobrar.length > 0 ? 'text-[#B45309]' : 'text-[#3B2417]'
               }`}>
                 {recepcion.totalSinCobrar} unidades ingresadas sin pedido previo

@@ -44,7 +44,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         <span className="block text-xs uppercase tracking-widest text-[#785E4E] font-semibold mb-1">
           Control de Depósito
         </span>
-        <h1 className="text-3xl font-serif font-bold text-[#3B2417] tracking-tight">
+        <h1 className="text-3xl font-display font-bold text-[#3B2417] tracking-tight">
           Taller Artesanal Heladero
         </h1>
         <p className="text-sm text-[#61493B] mt-1 max-w-xs mx-auto">

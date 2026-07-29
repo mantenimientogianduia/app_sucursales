@@ -154,7 +154,7 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
             <Camera className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h3 className="text-base font-serif font-bold text-white leading-none">
+            <h3 className="text-base font-display font-bold text-white leading-none">
               Escanear QR de Fábrica
             </h3>
             <span className="text-xs text-[#D5C4B1]">{totalEscaneados} escaneadas en esta recepción</span>
@@ -262,7 +262,7 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
             <div className="bg-[#28180E] p-4 rounded-3xl border border-[#3B2417]">
               <div className="flex items-center space-x-2 mb-3">
                 <Zap className="w-5 h-5 text-[#C1502E]" />
-                <h4 className="text-sm font-serif font-bold text-white">
+                <h4 className="text-sm font-display font-bold text-white">
                   Presets de prueba rápida
                 </h4>
               </div>
