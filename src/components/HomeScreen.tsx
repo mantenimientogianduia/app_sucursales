@@ -1,166 +1,109 @@
-import React, { useEffect, useState } from 'react';
-import {
-  PackagePlus,
-  History,
-  Store,
-  CheckCircle2,
-  AlertTriangle,
-  LogOut,
-  Calendar,
-  Clock,
-  ArrowRight,
-  ChevronRight
-} from 'lucide-react';
-import { LocalUsuario, RecepcionGuardada } from '../types';
-import { getHistorialRecepciones } from '../services/apiService';
+import React from 'react';
+import { PackagePlus, PackageSearch, LayoutGrid, LogOut, ChevronRight } from 'lucide-react';
+import { LocalUsuario } from '../types';
+import { BottomNav, AreaPrincipal } from './ui/BottomNav';
 
 interface HomeScreenProps {
   local: LocalUsuario;
   onIniciarRecepcion: () => void;
+  onIrAStock: () => void;
+  onIrAExhibidora: () => void;
   onLogout: () => void;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   local,
   onIniciarRecepcion,
-  onLogout
+  onIrAStock,
+  onIrAExhibidora,
+  onLogout,
 }) => {
-  const [historial, setHistorial] = useState<RecepcionGuardada[]>([]);
-  const [cargando, setCargando] = useState(true);
-
-  useEffect(() => {
-    let active = true;
-    getHistorialRecepciones().then((data) => {
-      if (active) {
-        setHistorial(data);
-        setCargando(false);
-      }
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
+  const handleNav = (area: AreaPrincipal) => {
+    if (area === 'stock') onIrAStock();
+    if (area === 'exhibidora') onIrAExhibidora();
+  };
 
   return (
-    <div className="min-h-screen flex flex-col justify-between p-4 pb-8 max-w-md mx-auto bg-[#F5EDE1] text-[#3B2417]">
-      {/* Top Bar / Header del Local */}
-      <div>
-        <div className="bg-[#FAF5EE] rounded-3xl p-5 border-2 border-[#D8C6B3] shadow-sm mb-6 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 rounded-2xl bg-[#E8DDD0] border border-[#D5C4B1] flex items-center justify-center shrink-0">
-              <Store className="w-6 h-6 text-[#C1502E]" />
-            </div>
-            <div>
-              <span className="text-xs uppercase tracking-wider font-semibold text-[#8C715F]">
-                {local.sucursalCodigo}
-              </span>
-              <h2 className="text-lg font-display font-bold text-[#3B2417] leading-snug">
-                Hola, {local.nombreLocal}
-              </h2>
-              <p className="text-xs text-[#785E4E]">{local.direccion}</p>
-            </div>
+    <div className="min-h-screen flex flex-col bg-paper text-ink pb-24">
+      {/* Cabecera del local */}
+      <div className="ticket-perforation bg-terracotta-deep text-paper-raised px-5 pt-8 pb-6">
+        <div className="flex items-center justify-between">
+          <div className="min-w-0">
+            <span className="block text-[10px] font-ticket uppercase tracking-[0.2em] text-terracotta">
+              {local.sucursalCodigo}
+            </span>
+            <h1 className="text-2xl font-display font-bold italic truncate mt-0.5">
+              {local.nombreLocal}
+            </h1>
           </div>
           <button
             onClick={onLogout}
-            title="Cerrar Sesión"
-            className="p-2.5 rounded-xl bg-[#E8DDD0]/60 hover:bg-[#E8DDD0] text-[#61493B] cursor-pointer transition-colors"
+            title="Cerrar sesión"
+            className="btn-tactile shrink-0 w-11 h-11 rounded-full bg-black/15 hover:bg-black/25 flex items-center justify-center cursor-pointer"
           >
             <LogOut className="w-5 h-5" />
           </button>
         </div>
+      </div>
 
-        {/* ACCIÓN PRINCIPAL — Botón Gigante (Mínimo 56px de alto, ideal para pulgar) */}
-        <div className="mb-8">
+      <div className="p-4 max-w-md w-full mx-auto flex-1">
+        {/* Acción principal: Recepción */}
+        <button
+          onClick={onIniciarRecepcion}
+          className="btn-tactile w-full bg-terracotta hover:bg-terracotta-dark text-white p-5 flex items-center gap-4 cursor-pointer group mb-3 shadow-md"
+          style={{ minHeight: '104px' }}
+        >
+          <div className="w-14 h-14 rounded-full bg-white/15 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+            <PackagePlus className="w-7 h-7 text-white" />
+          </div>
+          <div className="text-left min-w-0">
+            <span className="block text-lg font-display font-bold leading-tight">
+              Iniciar recepción de hoy
+            </span>
+            <span className="text-xs text-white/80 font-medium">
+              Lista esperada + escáner QR de fábrica
+            </span>
+          </div>
+          <ChevronRight className="w-5 h-5 ml-auto shrink-0 opacity-70" />
+        </button>
+
+        {/* Accesos a Stock y Exhibidora */}
+        <div className="grid grid-cols-2 gap-3 mb-6">
           <button
-            onClick={onIniciarRecepcion}
-            className="btn-tactile w-full bg-[#C1502E] hover:bg-[#A84224] active:bg-[#8F351B] text-white p-6 rounded-3xl shadow-lg border-2 border-[#A84224] flex flex-col items-center text-center justify-center space-y-3 cursor-pointer group transition-all"
-            style={{ minHeight: '120px' }}
+            onClick={onIrAStock}
+            className="btn-tactile card-flat p-4 flex flex-col items-start gap-2 cursor-pointer hover:border-sage/50 transition-colors"
+            style={{ minHeight: '112px' }}
           >
-            <div className="w-14 h-14 rounded-full bg-white/15 flex items-center justify-center group-hover:scale-105 transition-transform">
-              <PackagePlus className="w-8 h-8 text-white" />
+            <div className="w-10 h-10 rounded-full bg-sage-tint flex items-center justify-center">
+              <PackageSearch className="w-5 h-5 text-sage-dark" />
             </div>
-            <div>
-              <span className="block text-2xl font-display font-bold tracking-tight">
-                Iniciar recepción de hoy
-              </span>
-              <span className="text-xs text-white/80 font-medium">
-                Abre la lista esperada y el escáner QR de fábrica
-              </span>
+            <span className="text-sm font-display font-bold text-ink leading-tight text-left">
+              Stock del depósito
+            </span>
+            <span className="text-[11px] text-ink-soft text-left">Exhibir partidas al mostrador</span>
+          </button>
+
+          <button
+            onClick={onIrAExhibidora}
+            className="btn-tactile card-flat p-4 flex flex-col items-start gap-2 cursor-pointer hover:border-gold/50 transition-colors"
+            style={{ minHeight: '112px' }}
+          >
+            <div className="w-10 h-10 rounded-full bg-gold-tint flex items-center justify-center">
+              <LayoutGrid className="w-5 h-5 text-gold-dark" />
             </div>
+            <span className="text-sm font-display font-bold text-ink leading-tight text-left">
+              Exhibidora
+            </span>
+            <span className="text-[11px] text-ink-soft text-left">Qué está exhibido ahora</span>
           </button>
         </div>
 
-        {/* HISTORIAL DE RECEPCIONES ANTERIORES (Solo visual) */}
-        <div>
-          <div className="flex items-center justify-between mb-3 px-1">
-            <div className="flex items-center space-x-2">
-              <History className="w-4 h-4 text-[#C1502E]" />
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-[#61493B]">
-                Recepciones Recientes
-              </h3>
-            </div>
-            <span className="text-xs text-[#8C715F]">Últimos registros</span>
-          </div>
-
-          {cargando ? (
-            <div className="p-6 text-center text-xs text-[#8C715F]">Cargando historial...</div>
-          ) : historial.length === 0 ? (
-            <div className="p-6 bg-[#FAF5EE] rounded-2xl border border-[#E3D4C4] text-center text-xs text-[#8C715F]">
-              No hay recepciones guardadas aún.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {historial.map((rec) => (
-                <div
-                  key={rec.id}
-                  className="bg-[#FAF5EE] rounded-2xl p-4 border border-[#D8C6B3] flex items-center justify-between"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-2 text-xs font-semibold text-[#3B2417]">
-                      <Calendar className="w-3.5 h-3.5 text-[#8C715F]" />
-                      <span>{rec.fecha}</span>
-                      <Clock className="w-3.5 h-3.5 text-[#8C715F] ml-1" />
-                      <span>{rec.hora} hs</span>
-                    </div>
-
-                    <div className="flex items-center space-x-3 text-xs pt-1">
-                      <span className="flex items-center text-[#1E5128] font-medium bg-[#1E5128]/10 px-2 py-0.5 rounded-md">
-                        <CheckCircle2 className="w-3 h-3 mr-1" />
-                        {rec.totalRecibidosOk} OK
-                      </span>
-
-                      {rec.totalFaltantes > 0 && (
-                        <span className="flex items-center text-[#B91C1C] font-medium bg-[#B91C1C]/10 px-2 py-0.5 rounded-md">
-                          <AlertTriangle className="w-3 h-3 mr-1" />
-                          {rec.totalFaltantes} Faltante
-                        </span>
-                      )}
-
-                      {rec.totalSinCobrar > 0 && (
-                        <span className="flex items-center text-[#B45309] font-medium bg-[#B45309]/10 px-2 py-0.5 rounded-md">
-                          {rec.totalSinCobrar} Extra
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="text-right pl-2">
-                    <span className="text-xs font-display font-bold text-[#3B2417] block">
-                      {rec.id}
-                    </span>
-                    <ChevronRight className="w-4 h-4 text-[#8C715F] ml-auto mt-1" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="text-center text-[11px] font-ticket text-ink-soft/60 tracking-wide pt-4 border-t border-ink/10">
+          Obrador · Gianduia
         </div>
       </div>
 
-      {/* Footer Info */}
-      <div className="pt-6 text-center text-xs text-[#8C715F] border-t border-[#E3D4C4] mt-6">
-        <span>Taller Artesanal Heladero • Recepción de Fábrica</span>
-      </div>
+      <BottomNav activa="inicio" onNavegar={handleNav} />
     </div>
   );
 };

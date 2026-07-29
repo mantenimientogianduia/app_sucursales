@@ -20,8 +20,10 @@ import { ChecklistScreen } from './components/ChecklistScreen';
 import { ResumenScreen } from './components/ResumenScreen';
 import { CameraScannerModal } from './components/CameraScannerModal';
 import { ManualEntryModal } from './components/ManualEntryModal';
+import { StockScreen } from './components/StockScreen';
+import { ExhibidoraScreen } from './components/ExhibidoraScreen';
 
-type PantallaNavegacion = 'login' | 'inicio' | 'checklist' | 'resumen';
+type PantallaNavegacion = 'login' | 'inicio' | 'checklist' | 'resumen' | 'stock' | 'exhibidora';
 
 export default function App() {
   const [pantalla, setPantalla] = useState<PantallaNavegacion>('login');
@@ -149,7 +151,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5EDE1] text-[#3B2417] selection:bg-[#C1502E] selection:text-white">
+    <div className="min-h-screen bg-paper text-ink selection:bg-terracotta selection:text-white">
       {/* 1. Pantalla de Login */}
       {pantalla === 'login' && (
         <LoginScreen onLoginSuccess={handleLoginSuccess} />
@@ -160,7 +162,25 @@ export default function App() {
         <HomeScreen
           local={local}
           onIniciarRecepcion={handleIniciarRecepcion}
+          onIrAStock={() => setPantalla('stock')}
+          onIrAExhibidora={() => setPantalla('exhibidora')}
           onLogout={handleLogout}
+        />
+      )}
+
+      {/* Stock del depósito */}
+      {pantalla === 'stock' && (
+        <StockScreen
+          onVolver={() => setPantalla('inicio')}
+          onIrAExhibidora={() => setPantalla('exhibidora')}
+        />
+      )}
+
+      {/* Exhibidora */}
+      {pantalla === 'exhibidora' && (
+        <ExhibidoraScreen
+          onVolver={() => setPantalla('inicio')}
+          onIrAStock={() => setPantalla('stock')}
         />
       )}
 

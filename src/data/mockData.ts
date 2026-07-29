@@ -10,15 +10,15 @@
  */
 export const PRESETS_QR_SIMULADOR = [
   {
-    etiqueta: 'Producto de prueba A',
-    qrString: 'TEST-PROD-A-QRTEST-PROD-A-QR28/07/2026 10:00:0028/01/2027 4.000',
+    etiqueta: 'Cadbury de Frutilla',
+    qrString: 'PT-HEL-173PT-HEL-17328/07/2026 10:00:0028/01/2027 4.000',
   },
   {
-    etiqueta: 'Producto de prueba B',
-    qrString: 'TEST-PROD-B-QRTEST-PROD-B-QR28/07/2026 10:15:0015/09/2026 2.500',
+    etiqueta: 'Kinbueno Blanco',
+    qrString: 'PT-HEL-168PT-HEL-16828/07/2026 10:15:0015/09/2026 2.500',
   },
   {
-    etiqueta: 'Producto no esperado (prueba)',
-    qrString: 'TEST-PROD-C-QRTEST-PROD-C-QR28/07/2026 10:30:0001/11/2026 1.000',
+    etiqueta: 'Sablée Almendras',
+    qrString: 'PT-HEL-151PT-HEL-15128/07/2026 10:30:0001/11/2026 1.000',
   },
 ];

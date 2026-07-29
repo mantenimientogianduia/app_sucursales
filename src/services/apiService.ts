@@ -3,7 +3,13 @@ import {
   ItemEscaneado,
   Reclamo,
   LocalUsuario,
-  RecepcionGuardada
+  RecepcionGuardada,
+  FamiliaConStock,
+  ProductoConStock,
+  PartidaDisponible,
+  ExhibidoBacha,
+  ExhibidoResto,
+  HistorialExhibicion
 } from '../types';
 
 /**
@@ -236,4 +242,46 @@ export async function enviarRecepcionFinalizada(
   };
 
   return { ok: true, recepcion };
+}
+
+/* ---------------------- Stock / Exhibidora ---------------------- */
+
+export async function getFamiliasConStock(): Promise<FamiliaConStock[]> {
+  const data = await apiFetch('/api/stock/familias');
+  return data.familias || [];
+}
+
+export async function getProductosConStock(opts: {
+  familia?: string;
+  sinFamilia?: boolean;
+}): Promise<ProductoConStock[]> {
+  const params = new URLSearchParams();
+  if (opts.sinFamilia) params.set('sinFamilia', 'true');
+  else if (opts.familia) params.set('familia', opts.familia);
+  const qs = params.toString();
+  const data = await apiFetch(`/api/stock/productos${qs ? `?${qs}` : ''}`);
+  return data.productos || [];
+}
+
+export async function getPartidasDisponibles(idProd: string): Promise<PartidaDisponible[]> {
+  const data = await apiFetch(`/api/stock/productos/${encodeURIComponent(idProd)}/partidas`);
+  return data.partidas || [];
+}
+
+export async function exhibirLote(idLote: number | string): Promise<{ idLote: number | string; posicion: number | null }> {
+  return apiFetch(`/api/stock/lotes/${idLote}/exhibir`, { method: 'POST' });
+}
+
+export async function desexhibirLote(idLote: number | string): Promise<void> {
+  await apiFetch(`/api/stock/lotes/${idLote}/desexhibir`, { method: 'POST' });
+}
+
+export async function getExhibidora(): Promise<{ bacha: ExhibidoBacha[]; resto: ExhibidoResto[] }> {
+  const data = await apiFetch('/api/stock/exhibidora');
+  return { bacha: data.bacha || [], resto: data.resto || [] };
+}
+
+export async function getHistorialProducto(idProd: string): Promise<HistorialExhibicion[]> {
+  const data = await apiFetch(`/api/stock/productos/${encodeURIComponent(idProd)}/historial`);
+  return data.historial || [];
 }

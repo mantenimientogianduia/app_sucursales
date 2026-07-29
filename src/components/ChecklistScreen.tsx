@@ -7,12 +7,9 @@ import {
   AlertTriangle,
   Clock,
   ArrowRight,
-  Sparkles,
-  PackageCheck,
-  ChevronDown,
-  Info
 } from 'lucide-react';
 import { ItemEsperado, ItemEscaneado } from '../types';
+import { Stamp } from './ui/Stamp';
 
 interface ChecklistScreenProps {
   esperados: ItemEsperado[];
@@ -44,10 +41,8 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
       ? escaneados.filter(esc => esc.partida === esp.partida)
       : escaneados.filter(esc => esc.idProd === esp.idProd && !esc.partida);
 
-  // Calcular totales de progreso
   const totalEsperadosDistintos = esperados.length;
 
-  // Conteo de cuántos ítems esperados ya tienen al menos 1 unidad recibida o completa
   const esperadosCumplidosCount = esperados.filter(esp => {
     const sum = capturasParaEsperado(esp).reduce((a, b) => a + b.cantidad, 0);
     return sum >= esp.cantidad;
@@ -61,7 +56,6 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
 
   const porcentajeProgreso = Math.round((totalUnidadesRecibidasOk / Math.max(1, totalUnidadesEsperadas)) * 100);
 
-  // Auto-dismiss toast
   useEffect(() => {
     if (toastMsg) {
       const timer = setTimeout(() => setToastMsg(null), 2500);
@@ -69,106 +63,82 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
     }
   }, [toastMsg]);
 
-  // Mostrar un toast cada vez que se confirma una captura nueva (QR o manual).
-  // El escaneo en si ya fue resuelto por el servidor antes de llegar acá
-  // (App.tsx agrega al principio de la lista), acá solo reaccionamos al
-  // cambio para dar feedback inmediato.
   useEffect(() => {
     if (escaneados.length > cantidadAnteriorRef.current) {
       const nuevo = escaneados[0];
       setToastMsg(
         nuevo.matched
-          ? { text: `✓ Coincide: ${nuevo.nombreProducto}`, type: 'match' }
-          : { text: `⚠ NO ESPERADO: ${nuevo.nombreProducto}`, type: 'extra' }
+          ? { text: `Coincide: ${nuevo.nombreProducto}`, type: 'match' }
+          : { text: `NO ESPERADO: ${nuevo.nombreProducto}`, type: 'extra' }
       );
     }
     cantidadAnteriorRef.current = escaneados.length;
   }, [escaneados]);
 
   return (
-    <div className="min-h-screen flex flex-col justify-between bg-[#F5EDE1] text-[#3B2417] pb-36 max-w-md mx-auto relative">
-      
-      {/* 1. CONTADOR FIJO ARRIBA */}
-      <div className="sticky top-0 z-30 bg-[#28180E] text-white shadow-md border-b border-[#3B2417]">
-        <div className="p-4 flex items-center justify-between">
+    <div className="min-h-screen flex flex-col bg-paper text-ink pb-36 max-w-md mx-auto relative">
+      {/* CONTADOR FIJO ARRIBA */}
+      <div className="ticket-perforation sticky top-0 z-30 bg-terracotta-deep text-paper-raised shadow-md">
+        <div className="p-4 flex items-end justify-between">
           <div>
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-[#D5C4B1] block">
-              Progreso de Recepción
+            <span className="text-[10px] font-ticket font-semibold uppercase tracking-[0.14em] text-paper-raised/60 block">
+              Progreso de recepción
             </span>
-            <div className="flex items-baseline space-x-1.5">
-              <span className="text-2xl font-display font-bold text-white">
-                {esperadosCumplidosCount} de {totalEsperadosDistintos}
+            <div className="flex items-baseline gap-2 mt-0.5">
+              <span className="text-3xl font-display font-bold italic leading-none">
+                {esperadosCumplidosCount}/{totalEsperadosDistintos}
               </span>
-              <span className="text-xs text-[#C5B4A3]">esperados listos</span>
+              <span className="text-xs text-paper-raised/70">esperados listos</span>
             </div>
           </div>
-
           <div className="text-right">
-            <span className="text-xl font-bold font-display text-[#C1502E]">
+            <span className="text-2xl font-ticket font-bold text-terracotta leading-none">
               {porcentajeProgreso}%
             </span>
-            <span className="block text-[10px] text-[#C5B4A3]">
+            <span className="block text-[10px] font-ticket text-paper-raised/60 mt-0.5">
               {totalUnidadesRecibidasOk}/{totalUnidadesEsperadas} u.
             </span>
           </div>
         </div>
 
-        {/* Barra de Progreso Visual */}
-        <div className="w-full bg-[#1A100A] h-2">
+        <div className="w-full bg-black/30 h-1.5">
           <div
-            className="h-full bg-[#C1502E] transition-all duration-300 ease-out"
+            className="h-full bg-terracotta transition-all duration-300 ease-out"
             style={{ width: `${porcentajeProgreso}%` }}
-          ></div>
+          />
         </div>
 
-        {/* Filtros rápidos */}
-        <div className="flex px-2 py-1.5 bg-[#20130B] border-t border-[#3B2417] space-x-1 overflow-x-auto text-xs">
-          <button
-            onClick={() => setFiltro('todos')}
-            className={`px-3 py-1.5 rounded-lg font-medium cursor-pointer transition-colors whitespace-nowrap ${
-              filtro === 'todos' ? 'bg-[#3B2417] text-white' : 'text-[#C5B4A3] hover:text-white'
-            }`}
-          >
-            Todos ({esperados.length})
-          </button>
-          <button
-            onClick={() => setFiltro('pendientes')}
-            className={`px-3 py-1.5 rounded-lg font-medium cursor-pointer transition-colors whitespace-nowrap ${
-              filtro === 'pendientes' ? 'bg-[#B45309] text-white' : 'text-[#C5B4A3] hover:text-white'
-            }`}
-          >
-            Pendientes ({esperados.length - esperadosCumplidosCount})
-          </button>
-          <button
-            onClick={() => setFiltro('coinciden')}
-            className={`px-3 py-1.5 rounded-lg font-medium cursor-pointer transition-colors whitespace-nowrap ${
-              filtro === 'coinciden' ? 'bg-[#1E5128] text-white' : 'text-[#C5B4A3] hover:text-white'
-            }`}
-          >
-            Coincidieron ({esperadosCumplidosCount})
-          </button>
-          <button
-            onClick={() => setFiltro('extra')}
-            className={`px-3 py-1.5 rounded-lg font-medium cursor-pointer transition-colors whitespace-nowrap ${
-              filtro === 'extra' ? 'bg-[#B91C1C] text-white' : 'text-[#C5B4A3] hover:text-white'
-            }`}
-          >
-            No Esperados ({escaneados.filter(e => !e.matched).length})
-          </button>
+        <div className="flex px-2 py-1.5 bg-black/20 space-x-1 overflow-x-auto text-xs">
+          {(
+            [
+              ['todos', `Todos (${esperados.length})`],
+              ['pendientes', `Pendientes (${esperados.length - esperadosCumplidosCount})`],
+              ['coinciden', `Coincidieron (${esperadosCumplidosCount})`],
+              ['extra', `No esperados (${escaneados.filter(e => !e.matched).length})`],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setFiltro(key)}
+              className={`px-3 py-1.5 font-ticket font-medium cursor-pointer transition-colors whitespace-nowrap ${
+                filtro === key ? 'bg-terracotta text-white' : 'text-paper-raised/60 hover:text-paper-raised'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* TOAST FLOTANTE DE RETROALIMENTACIÓN RÁPIDA */}
+      {/* TOAST */}
       <AnimatePresence>
         {toastMsg && (
           <motion.div
-            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            initial={{ opacity: 0, y: -16, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            className={`fixed top-32 left-4 right-4 z-40 p-3.5 rounded-2xl shadow-xl text-xs font-bold text-white flex items-center justify-between border ${
-              toastMsg.type === 'match'
-                ? 'bg-[#1E5128] border-green-400 shadow-green-950/30'
-                : 'bg-[#B91C1C] border-red-400 shadow-red-950/30'
+            exit={{ opacity: 0, y: -16, scale: 0.95 }}
+            className={`fixed top-32 left-4 right-4 z-40 p-3.5 shadow-xl text-xs font-bold text-white flex items-center justify-between border-2 max-w-md mx-auto ${
+              toastMsg.type === 'match' ? 'bg-ok border-white/30' : 'bg-danger border-white/30'
             }`}
           >
             <span>{toastMsg.text}</span>
@@ -177,97 +147,75 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
         )}
       </AnimatePresence>
 
-      {/* 2. LISTA DE PRODUCTOS ESPERADOS Y ESCANEADOS */}
-      <div className="p-4 space-y-3">
-        {/* Renderizado de ítems esperados */}
+      {/* LISTA */}
+      <div className="px-4 pt-3">
         <AnimatePresence>
           {esperados.map((esp, index) => {
-            // Unidades escaneadas asociadas (por partida exacta, o por
-            // producto solo para los sin partida — ver capturasParaEsperado)
             const escaneadosParaEsp = capturasParaEsperado(esp);
             const totalRecibido = escaneadosParaEsp.reduce((acc, curr) => acc + curr.cantidad, 0);
 
             const isCompleto = totalRecibido >= esp.cantidad;
             const isParcial = totalRecibido > 0 && totalRecibido < esp.cantidad;
 
-            // Filtrado
             if (filtro === 'pendientes' && isCompleto) return null;
             if (filtro === 'coinciden' && totalRecibido === 0) return null;
-            if (filtro === 'extra') return null; // los extra se renderizan abajo
+            if (filtro === 'extra') return null;
 
             return (
               <motion.div
                 key={`${esp.idProd}-${esp.partida || 'sin-partida'}-${index}`}
-                initial={{ opacity: 0, y: 12 }}
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, delay: index * 0.04 }}
-                className={`rounded-2xl p-4 border-2 transition-all min-h-[72px] flex flex-col justify-between ${
-                  isCompleto
-                    ? 'bg-[#EAF4ED] border-[#1E5128] shadow-xs'
-                    : isParcial
-                    ? 'bg-[#FEF3C7] border-[#B45309]'
-                    : 'bg-[#FAF5EE] border-[#D8C6B3]'
-                }`}
+                transition={{ duration: 0.22, delay: Math.min(index * 0.03, 0.3) }}
+                className={`list-row py-3 flex flex-col gap-1.5 ${isCompleto ? 'opacity-80' : ''}`}
               >
-                {/* Header de fila */}
-                <div className="flex items-start justify-between">
-                  <div className="space-y-0.5">
-                    <div className="flex items-center space-x-1.5">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#785E4E] bg-[#E8DDD0] px-2 py-0.5 rounded-md">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    {esp.categoria && (
+                      <span className="inline-block text-[10px] font-ticket font-semibold uppercase tracking-wider text-ink-soft bg-paper-sunken px-1.5 py-0.5">
                         {esp.categoria}
                       </span>
-                      {esp.partida && (
-                        <span className="text-[10px] font-mono text-[#61493B]">
-                          Lote: {esp.partida}
-                        </span>
-                      )}
-                    </div>
-                    <h4 className="text-sm font-semibold text-[#3B2417] leading-snug">
+                    )}
+                    {esp.partida && (
+                      <span
+                        className="block text-[10px] font-ticket text-ink-soft/70 truncate max-w-[190px] mt-0.5"
+                        title={esp.partida}
+                      >
+                        {esp.partida}
+                      </span>
+                    )}
+                    <h4 className="text-sm font-semibold text-ink leading-snug mt-0.5">
                       {esp.nombreProducto}
                     </h4>
                   </div>
 
-                  {/* BADGE DE ESTADO CON REGLAS DE COLOR STRICTAS */}
-                  <div>
-                    {isCompleto ? (
-                      <div className="bg-[#1E5128] text-white px-2.5 py-1 rounded-xl text-xs font-bold flex items-center space-x-1 shadow-xs">
-                        <motion.div
-                          initial={{ scale: 0 }}
-                          animate={{ scale: [0, 1.2, 1] }}
-                          transition={{ type: 'spring', stiffness: 400, damping: 15 }}
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                        </motion.div>
-                        <span>Coincide ({totalRecibido}/{esp.cantidad})</span>
-                      </div>
-                    ) : isParcial ? (
-                      <div className="bg-[#B45309] text-white px-2.5 py-1 rounded-xl text-xs font-bold flex items-center space-x-1">
-                        <Clock className="w-3.5 h-3.5" />
-                        <span>Incompleto ({totalRecibido}/{esp.cantidad})</span>
-                      </div>
-                    ) : (
-                      <div className="bg-[#B45309]/15 text-[#B45309] border border-[#B45309]/40 px-2.5 py-1 rounded-xl text-xs font-semibold">
-                        Pendiente (0/{esp.cantidad})
-                      </div>
-                    )}
-                  </div>
+                  {isCompleto ? (
+                    <motion.div
+                      initial={{ scale: 0, rotate: 8 }}
+                      animate={{ scale: 1, rotate: -2.5 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+                    >
+                      <Stamp variant="ok">
+                        <CheckCircle2 className="w-3 h-3" />
+                        {totalRecibido}/{esp.cantidad}
+                      </Stamp>
+                    </motion.div>
+                  ) : isParcial ? (
+                    <Stamp variant="warn">
+                      <Clock className="w-3 h-3" />
+                      {totalRecibido}/{esp.cantidad}
+                    </Stamp>
+                  ) : (
+                    <span className="text-xs font-ticket text-ink-soft/70 shrink-0 mt-0.5">0/{esp.cantidad}</span>
+                  )}
                 </div>
 
-                {/* Subdetalles de escaneos específicos */}
                 {escaneadosParaEsp.length > 0 && (
-                  <div className="mt-3 pt-2 border-t border-[#D5C4B1]/50 space-y-1">
-                    <span className="text-[10px] font-semibold text-[#785E4E] block">
-                      Capturas escaneadas:
-                    </span>
+                  <div className="pl-0.5 space-y-1">
                     {escaneadosParaEsp.map((esc) => (
-                      <div
-                        key={esc.id}
-                        className="flex items-center justify-between text-xs bg-white/60 p-2 rounded-xl border border-[#D5C4B1]"
-                      >
-                        <span className="font-mono text-[#3B2417] text-[11px]">
-                          {esc.origenCarga === 'qr' ? 'QR' : 'Manual'} • {esc.timestamp}
-                        </span>
-                        <span className="font-bold text-xs text-[#3B2417]">{esc.cantidad} u.</span>
+                      <div key={esc.id} className="flex items-center justify-between text-[11px] font-ticket text-ink-soft">
+                        <span>{esc.origenCarga === 'qr' ? 'QR' : 'Manual'} · {esc.timestamp}</span>
+                        <span className="font-bold text-ink">{esc.cantidad} u.</span>
                       </div>
                     ))}
                   </div>
@@ -277,71 +225,57 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
           })}
         </AnimatePresence>
 
-        {/* 3. BLOQUE DE ITEMS NO ESPERADOS (Rojo ladrillo #B91C1C, sin bloquear nada) */}
+        {/* NO ESPERADOS */}
         {escaneados.filter(e => !e.matched).length > 0 && (filtro === 'todos' || filtro === 'extra') && (
-          <div className="pt-4 border-t-2 border-dashed border-[#B91C1C]/40 space-y-3">
-            <div className="flex items-center space-x-2 px-1">
-              <AlertTriangle className="w-5 h-5 text-[#B91C1C]" />
-              <h4 className="text-sm font-display font-bold text-[#B91C1C] uppercase tracking-wider">
-                Ítems No Esperados / Sin Cobrar ({escaneados.filter(e => !e.matched).length})
+          <div className="pt-4 mt-2 border-t-2 border-dashed border-danger/40 space-y-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-danger" />
+              <h4 className="text-xs font-display font-bold text-danger uppercase tracking-wider">
+                Sin cobrar / no esperados ({escaneados.filter(e => !e.matched).length})
               </h4>
             </div>
 
             {escaneados.filter(e => !e.matched).map((esc) => (
-              <div
-                key={esc.id}
-                className="bg-[#FDF2F2] border-2 border-[#B91C1C] rounded-2xl p-4 min-h-[72px] flex flex-col justify-between animate-shake"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="bg-[#B91C1C] text-white text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider">
-                      No figuraba en pedido
-                    </span>
-                    <h5 className="text-sm font-semibold text-[#3B2417] mt-1">
-                      {esc.nombreProducto}
-                    </h5>
-                    <p className="text-xs text-[#785E4E]">
-                      {esc.idProd} {esc.partida ? `• Lote: ${esc.partida}` : ''}
-                    </p>
-                  </div>
-
-                  <span className="font-bold text-sm text-[#991B1B]">{esc.cantidad} u.</span>
+              <div key={esc.id} className="bg-danger-tint border border-danger/40 p-3 flex items-center justify-between animate-shake">
+                <div className="min-w-0">
+                  <h5 className="text-sm font-semibold text-ink truncate">{esc.nombreProducto}</h5>
+                  <p className="text-[11px] font-ticket text-ink-soft">
+                    {esc.idProd} {esc.partida ? `· ${esc.partida}` : ''}
+                  </p>
                 </div>
+                <span className="font-bold text-sm text-danger shrink-0 ml-2">{esc.cantidad} u.</span>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* 4. BARRA DE ACCIÓN FIJA EN LA PARTE INFERIOR (Targets grandes 56px de alto) */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-[#FAF5EE] border-t-2 border-[#D8C6B3] p-4 max-w-md mx-auto space-y-2.5 shadow-xl">
+      {/* BARRA DE ACCIÓN FIJA */}
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-paper-raised border-t-2 border-ink/15 p-3 max-w-md mx-auto space-y-2 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
         <div className="grid grid-cols-2 gap-2">
-          {/* Botón Escanear QR (Terracota #C1502E) */}
           <button
             onClick={onOpenScanner}
-            className="btn-tactile h-14 bg-[#C1502E] hover:bg-[#A84224] active:bg-[#8F351B] text-white font-semibold text-sm rounded-2xl shadow-md flex items-center justify-center space-x-2 cursor-pointer border border-[#A84224]"
+            className="btn-tactile h-14 bg-terracotta hover:bg-terracotta-dark text-white font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer"
           >
-            <QrCode className="w-5 h-5 text-white" />
+            <QrCode className="w-5 h-5" />
             <span>Escanear QR</span>
           </button>
 
-          {/* Botón Cargar Manual (Insumos sin QR) */}
           <button
             onClick={onOpenManual}
-            className="btn-tactile h-14 bg-[#E8DDD0] hover:bg-[#D5C4B1] active:bg-[#C5B4A3] text-[#3B2417] font-semibold text-sm rounded-2xl border-2 border-[#CBB7A3] flex items-center justify-center space-x-1.5 cursor-pointer"
+            className="btn-tactile h-14 bg-paper-sunken hover:bg-ink/10 text-ink font-semibold text-sm border border-ink/20 flex items-center justify-center gap-1.5 cursor-pointer"
           >
-            <PlusCircle className="w-5 h-5 text-[#61493B]" />
-            <span>Cargar Manual</span>
+            <PlusCircle className="w-5 h-5" />
+            <span>Carga manual</span>
           </button>
         </div>
 
-        {/* Botón Finalizar Recepción */}
         <button
           onClick={onFinalizar}
-          className="btn-tactile w-full h-14 bg-[#3B2417] hover:bg-[#28180E] text-white font-bold text-base rounded-2xl shadow-lg flex items-center justify-center space-x-2 cursor-pointer border border-[#20130B]"
+          className="btn-tactile w-full h-14 bg-ink hover:bg-terracotta-deep text-white font-bold text-base flex items-center justify-center gap-2 cursor-pointer"
         >
-          <span>Finalizar Recepción</span>
-          <ArrowRight className="w-5 h-5 text-[#C1502E]" />
+          <span>Finalizar recepción</span>
+          <ArrowRight className="w-5 h-5 text-terracotta" />
         </button>
       </div>
     </div>

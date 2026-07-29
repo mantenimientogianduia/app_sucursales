@@ -1,5 +1,5 @@
 /**
- * Tipos de datos para el prototipo de recepción de heladería
+ * Tipos de datos para la app de heladerías (Recepción + Stock/Exhibidora)
  */
 
 // Lo esperado, calculado del lado del servidor a partir de las ventas/pedidos del día
@@ -54,4 +54,90 @@ export type RecepcionGuardada = {
   escaneados: ItemEscaneado[];
   reclamos: Reclamo[];
   usuarioLocal: string;
+};
+
+/* ---------------------- Stock / Exhibidora ---------------------- */
+
+export type FamiliaConStock = {
+  familia: string | null;
+  cantidadProductos: number;
+};
+
+export type ProductoConStock = {
+  idProd: string;
+  nombreProducto: string;
+  familia: string | null;
+  partidasDisponibles: number;
+};
+
+export type PartidaDisponible = {
+  idLote: number | string;
+  partida: string | null;
+  cantidad: number | null;
+  venc: string | null;
+  timestampRecep: string;
+  origenCarga: string;
+  esFifo: boolean;
+};
+
+export type ExhibidoBacha = {
+  posicion: number;
+  idProd: string;
+  nombreProducto: string;
+  exhibido: {
+    idLote: number | string;
+    partida: string | null;
+    cantidad: number | null;
+    timestampExhibido: string;
+  } | null;
+};
+
+export type ExhibidoResto = {
+  idLote: number | string;
+  idProd: string;
+  nombreProducto: string;
+  partida: string | null;
+  cantidad: number | null;
+  timestampExhibido: string;
+};
+
+export type HistorialExhibicion = {
+  idLote: number | string;
+  partida: string | null;
+  cantidad: number | null;
+  timestampExhibido: string;
+  esUltimaExhibida: boolean;
+};
+
+/* ---------------------- Panel interno BACHA (admin) ---------------------- */
+
+export type UsuarioInterno = {
+  usuario: string;
+};
+
+export type PosicionVigente = {
+  idProd: string;
+  posicion: number;
+  nombreProducto: string;
+};
+
+export type CambioPendiente = {
+  idCambio: number | string;
+  posicion: number;
+  idProdNuevo: string;
+  idProdViejo: string;
+  fechaAnuncio: string;
+};
+
+export type ProductoBachaCandidato = {
+  idProd: string;
+  nombreProducto: string;
+};
+
+export type HistorialCambioPosicion = {
+  idCambio: number | string;
+  idProdNuevo: string;
+  idProdViejo: string | null;
+  fechaAnuncio: string;
+  fechaRetiro: string | null;
 };

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Store, Lock, ArrowRight, ShieldCheck, Info } from 'lucide-react';
+import { Lock, User, ArrowRight, AlertCircle } from 'lucide-react';
 import { LocalUsuario } from '../types';
 import { loginLocal } from '../services/apiService';
 
@@ -8,8 +8,8 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
-  const [usuario, setUsuario] = useState('gianduia_centro');
-  const [clave, setClave] = useState('123456');
+  const [usuario, setUsuario] = useState('');
+  const [clave, setClave] = useState('');
   const [cargando, setCargando] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -28,112 +28,97 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  const handleDemoFill = () => {
-    setUsuario('gianduia_centro');
-    setClave('123456');
-    setErrorMsg(null);
-  };
-
   return (
-    <div className="min-h-screen flex flex-col justify-between p-5 max-w-md mx-auto bg-[#F5EDE1] text-[#3B2417]">
-      {/* Header Marca / Taller Artesanal */}
-      <div className="pt-8 pb-4 text-center">
-        <div className="inline-flex items-[#3B2417] justify-center p-3 rounded-2xl bg-[#E8DDD0] border border-[#D5C4B1] mb-3 shadow-sm">
-          <Store className="w-10 h-10 text-[#C1502E]" />
-        </div>
-        <span className="block text-xs uppercase tracking-widest text-[#785E4E] font-semibold mb-1">
-          Control de Depósito
+    <div className="min-h-screen flex flex-col bg-paper text-ink">
+      {/* Franja superior tipo etiqueta de fábrica */}
+      <div className="bg-terracotta-deep text-paper-raised px-6 pt-14 pb-10 text-center relative overflow-hidden">
+        <div
+          className="absolute inset-0 opacity-[0.07]"
+          style={{
+            backgroundImage: 'repeating-linear-gradient(45deg, #fff 0, #fff 1px, transparent 1px, transparent 12px)',
+          }}
+        />
+        <span className="relative block text-[11px] font-ticket uppercase tracking-[0.25em] text-terracotta">
+          Obrador · Gianduia
         </span>
-        <h1 className="text-3xl font-display font-bold text-[#3B2417] tracking-tight">
-          Taller Artesanal Heladero
+        <h1 className="relative text-4xl font-display font-bold italic mt-2 tracking-tight">
+          Punto de venta
         </h1>
-        <p className="text-sm text-[#61493B] mt-1 max-w-xs mx-auto">
-          Ingreso de recepción de mercadería para locales y sucursales.
+        <p className="relative text-sm text-paper-raised/70 mt-2 max-w-xs mx-auto">
+          Recepción de mercadería y manejo de stock del local.
         </p>
       </div>
 
-      {/* Formulario de Login */}
-      <div className="bg-[#FAF5EE] rounded-3xl p-6 border-2 border-[#D8C6B3] shadow-md my-auto">
-        <div className="flex items-center space-x-2 pb-4 mb-4 border-b border-[#E3D4C4]">
-          <ShieldCheck className="w-5 h-5 text-[#C1502E]" />
-          <h2 className="text-base font-semibold text-[#3B2417]">
-            Acceso Sucursal
-          </h2>
-        </div>
+      {/* Formulario */}
+      <div className="flex-1 flex flex-col justify-center px-5 py-8 max-w-md w-full mx-auto -mt-6">
+        <div className="card-flat rounded-none p-6 shadow-lg relative">
+          <span className="absolute -top-3 left-6 bg-paper px-2 text-[10px] font-ticket font-bold uppercase tracking-[0.14em] text-ink-soft">
+            Acceso de local
+          </span>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#61493B] mb-1.5">
-              Usuario de Local
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={usuario}
-                onChange={(e) => setUsuario(e.target.value)}
-                placeholder="ej. gianduia_centro"
-                className="w-full h-14 pl-12 pr-4 bg-[#FAF5EE] border-2 border-[#CBB7A3] rounded-2xl text-base text-[#3B2417] font-medium focus:border-[#C1502E] focus:outline-none transition-colors"
-                required
-              />
-              <Store className="w-5 h-5 text-[#8C715F] absolute left-4 top-4" />
+          <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-ink-soft mb-1.5">
+                Usuario
+              </label>
+              <div className="relative">
+                <User className="w-4.5 h-4.5 text-ink-soft/70 absolute left-4 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={usuario}
+                  onChange={(e) => setUsuario(e.target.value)}
+                  placeholder="ej. suc2"
+                  autoCapitalize="none"
+                  className="w-full h-14 pl-11 pr-4 bg-paper-sunken border border-ink/15 text-base text-ink font-medium focus:border-terracotta focus:outline-none transition-colors"
+                  required
+                />
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#61493B] mb-1.5">
-              Contraseña
-            </label>
-            <div className="relative">
-              <input
-                type="password"
-                value={clave}
-                onChange={(e) => setClave(e.target.value)}
-                placeholder="••••••••"
-                className="w-full h-14 pl-12 pr-4 bg-[#FAF5EE] border-2 border-[#CBB7A3] rounded-2xl text-base text-[#3B2417] font-medium focus:border-[#C1502E] focus:outline-none transition-colors"
-                required
-              />
-              <Lock className="w-5 h-5 text-[#8C715F] absolute left-4 top-4" />
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-ink-soft mb-1.5">
+                Contraseña
+              </label>
+              <div className="relative">
+                <Lock className="w-4.5 h-4.5 text-ink-soft/70 absolute left-4 top-1/2 -translate-y-1/2" />
+                <input
+                  type="password"
+                  value={clave}
+                  onChange={(e) => setClave(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full h-14 pl-11 pr-4 bg-paper-sunken border border-ink/15 text-base text-ink font-medium focus:border-terracotta focus:outline-none transition-colors"
+                  required
+                />
+              </div>
             </div>
-          </div>
 
-          {errorMsg && (
-            <div className="p-3 bg-[#F8D7DA] border border-[#B91C1C] text-[#991B1B] text-xs font-medium rounded-xl flex items-center space-x-2">
-              <Info className="w-4 h-4 shrink-0" />
-              <span>{errorMsg}</span>
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={cargando}
-            className="btn-tactile w-full h-14 bg-[#C1502E] hover:bg-[#A84224] active:bg-[#8F351B] text-white font-semibold text-base rounded-2xl shadow-md flex items-center justify-center space-x-2 transition-colors cursor-pointer mt-2"
-          >
-            {cargando ? (
-              <span>Verificando...</span>
-            ) : (
-              <>
-                <span>Ingresar al Local</span>
-                <ArrowRight className="w-5 h-5" />
-              </>
+            {errorMsg && (
+              <div className="p-3 bg-danger-tint border border-danger text-danger text-xs font-medium flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{errorMsg}</span>
+              </div>
             )}
-          </button>
-        </form>
 
-        {/* Demo Quick Button */}
-        <div className="mt-4 pt-4 border-t border-[#E3D4C4] text-center">
-          <button
-            type="button"
-            onClick={handleDemoFill}
-            className="text-xs font-medium text-[#C1502E] hover:underline cursor-pointer"
-          >
-            Usar credenciales de demostración (Heladería La Gianduia)
-          </button>
+            <button
+              type="submit"
+              disabled={cargando}
+              className="btn-tactile w-full h-14 bg-terracotta hover:bg-terracotta-dark text-white font-semibold text-base flex items-center justify-center gap-2 cursor-pointer mt-2 disabled:opacity-60"
+            >
+              {cargando ? (
+                <span>Verificando...</span>
+              ) : (
+                <>
+                  <span>Ingresar</span>
+                  <ArrowRight className="w-5 h-5" />
+                </>
+              )}
+            </button>
+          </form>
         </div>
-      </div>
 
-      {/* Footer Utilitario */}
-      <div className="py-4 text-center text-xs text-[#8C715F]">
-        <span>PWA Recepción v2.4 • Taller Artesanal Heladero</span>
+        <p className="text-center text-[11px] font-ticket text-ink-soft/70 mt-6 tracking-wide">
+          Obrador v1.0 · Gianduia
+        </p>
       </div>
     </div>
   );
