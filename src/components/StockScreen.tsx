@@ -34,20 +34,17 @@ function formatFecha(iso: string | null): string {
 }
 
 // Misma logica que el backend (stockLogic.marcarFifo), para poder
-// recalcular al instante que partida queda como "mas antigua" de un
+// recalcular al instante que partidas quedan como "mas antiguas" de un
 // producto despues de exhibir una, sin tener que recargar toda la lista.
+// Compara solo el dia (no la hora): si dos partidas se fabricaron el mismo
+// dia, las dos quedan habilitadas, no solo la primera de la lista.
 function recalcularFifoDeProducto(partidas: PartidaConStock[], idProd: string): PartidaConStock[] {
   const delProducto = partidas.filter((p) => p.idProd === idProd);
   if (delProducto.length === 0) return partidas;
-  const fechaClave = (p: PartidaConStock) => p.fechaFabricacion || p.timestampRecep;
-  let indiceMasAntigua = 0;
-  for (let i = 1; i < delProducto.length; i += 1) {
-    if (new Date(fechaClave(delProducto[i])) < new Date(fechaClave(delProducto[indiceMasAntigua]))) {
-      indiceMasAntigua = i;
-    }
-  }
-  const idLoteFifo = delProducto[indiceMasAntigua].idLote;
-  return partidas.map((p) => (p.idProd === idProd ? { ...p, esFifo: p.idLote === idLoteFifo } : p));
+  const soloFecha = (p: PartidaConStock) => (p.fechaFabricacion || p.timestampRecep).slice(0, 10);
+  const fechaMasAntigua = delProducto.reduce((min, p) => (soloFecha(p) < min ? soloFecha(p) : min), soloFecha(delProducto[0]));
+  const idLotesFifo = new Set(delProducto.filter((p) => soloFecha(p) === fechaMasAntigua).map((p) => p.idLote));
+  return partidas.map((p) => (p.idProd === idProd ? { ...p, esFifo: idLotesFifo.has(p.idLote) } : p));
 }
 
 export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibidora }) => {
@@ -278,8 +275,13 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
             />
           ) : (
             <div>
-              {resultados.map((lote) => (
-                <div key={lote.idLote} className="list-row py-1.5 flex items-center justify-between gap-3">
+              {resultados.map((lote, index) => {
+                const nuevoGrupo = index > 0 && resultados[index - 1].idProd !== lote.idProd;
+                return (
+                <div
+                  key={lote.idLote}
+                  className={`list-row py-1.5 flex items-center justify-between gap-3 ${nuevoGrupo ? 'mt-3' : ''}`}
+                >
                   <div className="min-w-0 flex items-center gap-2">
                     {lote.familia && (
                       <span className="shrink-0 text-[9px] font-ticket font-semibold uppercase tracking-wider text-ink-soft bg-paper-sunken px-1.5 py-0.5">
@@ -306,7 +308,8 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
