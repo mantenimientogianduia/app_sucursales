@@ -65,6 +65,7 @@ export type PartidaConStock = {
   idProd: string;
   nombreProducto: string;
   familia: string | null;
+  unidadMedida: string | null;
   partida: string | null;
   cantidad: number | null;
   venc: string | null;

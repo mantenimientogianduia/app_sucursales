@@ -1,11 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, X, Boxes, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
+import { Search, X, Boxes, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { PartidaConStock } from '../types';
 import { getPartidasConStock, exhibirLote } from '../services/apiService';
 import { TicketHeader } from './ui/TicketHeader';
 import { AppShell, AreaPrincipal } from './ui/AppShell';
-import { Stamp } from './ui/Stamp';
 
 interface StockScreenProps {
   onVolver: () => void;
@@ -15,6 +14,18 @@ interface StockScreenProps {
 const TODAS = 'todas';
 const SIN_FAMILIA = 'sin-familia';
 
+const UNIDADES_CORTAS: Record<string, string> = {
+  'KGS.': 'kg',
+  'LTS.': 'L',
+  UNIDAD: 'u.',
+};
+
+function formatCantidad(cantidad: number | null, unidadMedida: string | null): string {
+  if (cantidad === null) return '—';
+  const unidad = (unidadMedida && UNIDADES_CORTAS[unidadMedida]) || 'u.';
+  return `${cantidad} ${unidad}`;
+}
+
 function formatFecha(iso: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso.length <= 10 ? `${iso}T00:00:00` : iso);
@@ -22,11 +33,29 @@ function formatFecha(iso: string | null): string {
   return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
 
+// Misma logica que el backend (stockLogic.marcarFifo), para poder
+// recalcular al instante que partida queda como "mas antigua" de un
+// producto despues de exhibir una, sin tener que recargar toda la lista.
+function recalcularFifoDeProducto(partidas: PartidaConStock[], idProd: string): PartidaConStock[] {
+  const delProducto = partidas.filter((p) => p.idProd === idProd);
+  if (delProducto.length === 0) return partidas;
+  const fechaClave = (p: PartidaConStock) => p.fechaFabricacion || p.timestampRecep;
+  let indiceMasAntigua = 0;
+  for (let i = 1; i < delProducto.length; i += 1) {
+    if (new Date(fechaClave(delProducto[i])) < new Date(fechaClave(delProducto[indiceMasAntigua]))) {
+      indiceMasAntigua = i;
+    }
+  }
+  const idLoteFifo = delProducto[indiceMasAntigua].idLote;
+  return partidas.map((p) => (p.idProd === idProd ? { ...p, esFifo: p.idLote === idLoteFifo } : p));
+}
+
 export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibidora }) => {
   const [partidas, setPartidas] = useState<PartidaConStock[]>([]);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState('');
   const [filtroFamilia, setFiltroFamilia] = useState<string>(TODAS);
+  const [filtroProducto, setFiltroProducto] = useState<string | null>(null);
 
   const [confirmandoLote, setConfirmandoLote] = useState<PartidaConStock | null>(null);
   const [exhibiendoId, setExhibiendoId] = useState<string | number | null>(null);
@@ -70,15 +99,41 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
     return [{ valor: TODAS, label: 'Todas', count: partidas.length }, ...lista];
   }, [partidas]);
 
+  // Partidas de la familia elegida, sin aplicar todavia busqueda ni producto
+  // — es la base sobre la que se arma el sub-filtro de productos, para que
+  // la lista de productos no cambie mientras el usuario escribe.
+  const partidasDeFamilia = useMemo(() => {
+    if (filtroFamilia === TODAS) return partidas;
+    if (filtroFamilia === SIN_FAMILIA) return partidas.filter((p) => p.familia === null);
+    return partidas.filter((p) => p.familia === filtroFamilia);
+  }, [partidas, filtroFamilia]);
+
+  const productosDeFamilia = useMemo(() => {
+    if (filtroFamilia === TODAS) return [];
+    const conteo = new Map<string, { nombreProducto: string; count: number }>();
+    for (const p of partidasDeFamilia) {
+      const actual = conteo.get(p.idProd);
+      if (actual) actual.count += 1;
+      else conteo.set(p.idProd, { nombreProducto: p.nombreProducto, count: 1 });
+    }
+    return [...conteo.entries()]
+      .map(([idProd, v]) => ({ idProd, nombreProducto: v.nombreProducto, count: v.count }))
+      .sort((a, b) => a.nombreProducto.localeCompare(b.nombreProducto));
+  }, [partidasDeFamilia, filtroFamilia]);
+
   const resultados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    return partidas.filter((p) => {
-      if (filtroFamilia === SIN_FAMILIA && p.familia !== null) return false;
-      if (filtroFamilia !== TODAS && filtroFamilia !== SIN_FAMILIA && p.familia !== filtroFamilia) return false;
+    return partidasDeFamilia.filter((p) => {
+      if (filtroProducto && p.idProd !== filtroProducto) return false;
       if (q && !p.nombreProducto.toLowerCase().includes(q) && !p.idProd.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [partidas, busqueda, filtroFamilia]);
+  }, [partidasDeFamilia, busqueda, filtroProducto]);
+
+  const elegirFamilia = (valor: string) => {
+    setFiltroFamilia(valor);
+    setFiltroProducto(null);
+  };
 
   const solicitarExhibir = (lote: PartidaConStock) => {
     if (!lote.esFifo) {
@@ -94,7 +149,7 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
     try {
       await exhibirLote(lote.idLote);
       setMensaje({ texto: `Exhibida: ${lote.nombreProducto}`, ok: true });
-      setPartidas((prev) => prev.filter((p) => p.idLote !== lote.idLote));
+      setPartidas((prev) => recalcularFifoDeProducto(prev.filter((p) => p.idLote !== lote.idLote), lote.idProd));
     } catch (err: any) {
       setMensaje({ texto: err.message || 'No se pudo exhibir la partida.', ok: false });
     } finally {
@@ -112,7 +167,7 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
       <TicketHeader
         eyebrow="Depósito"
         title="Buscar partida"
-        subtitle={cargando ? 'Cargando...' : `${resultados.length} de ${partidas.length} partidas`}
+        subtitle={cargando ? 'Cargando...' : `${resultados.length} de ${partidasDeFamilia.length} partidas`}
       />
 
       <AnimatePresence>
@@ -161,7 +216,7 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
             return (
               <button
                 key={f.valor}
-                onClick={() => setFiltroFamilia(f.valor)}
+                onClick={() => elegirFamilia(f.valor)}
                 className={`shrink-0 md:w-full px-3 py-2 text-xs font-ticket font-semibold text-left whitespace-nowrap md:whitespace-normal border transition-colors cursor-pointer flex items-center justify-between gap-3 ${
                   activo
                     ? 'bg-terracotta text-white border-terracotta'
@@ -177,6 +232,39 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
 
         {/* RESULTADOS */}
         <div className="flex-1 min-w-0">
+          {/* SUB-FILTRO DE PRODUCTO: aparece al elegir una familia, para no tener que escribir */}
+          {!cargando && filtroFamilia !== TODAS && productosDeFamilia.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              <button
+                onClick={() => setFiltroProducto(null)}
+                className={`px-2.5 py-1.5 text-[11px] font-ticket font-semibold border transition-colors cursor-pointer ${
+                  filtroProducto === null
+                    ? 'bg-ink text-white border-ink'
+                    : 'bg-paper-raised text-ink-soft border-ink/15 hover:border-ink/40'
+                }`}
+              >
+                Todos los productos
+              </button>
+              {productosDeFamilia.map((p) => {
+                const activo = filtroProducto === p.idProd;
+                return (
+                  <button
+                    key={p.idProd}
+                    onClick={() => setFiltroProducto(activo ? null : p.idProd)}
+                    className={`px-2.5 py-1.5 text-[11px] font-ticket font-semibold border transition-colors cursor-pointer flex items-center gap-1.5 ${
+                      activo
+                        ? 'bg-ink text-white border-ink'
+                        : 'bg-paper-raised text-ink-soft border-ink/15 hover:border-ink/40'
+                    }`}
+                  >
+                    <span>{p.nombreProducto}</span>
+                    <span className={activo ? 'text-white/60' : 'text-ink-soft/50'}>{p.count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {cargando ? (
             <div className="py-16 text-center text-sm text-ink-soft">Cargando...</div>
           ) : resultados.length === 0 ? (
@@ -191,34 +279,28 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
           ) : (
             <div>
               {resultados.map((lote) => (
-                <div key={lote.idLote} className="list-row py-3 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-                      {lote.familia && (
-                        <span className="text-[9px] font-ticket font-semibold uppercase tracking-wider text-ink-soft bg-paper-sunken px-1.5 py-0.5">
-                          {lote.familia}
-                        </span>
-                      )}
-                      {lote.esFifo && <Stamp variant="sage">Más antigua</Stamp>}
-                    </div>
-                    <h4 className="text-sm font-semibold text-ink leading-snug truncate">
-                      {lote.nombreProducto}
-                    </h4>
-                    <div className="flex items-center gap-2.5 text-[11px] font-ticket text-ink-soft mt-0.5">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        fab {formatFecha(lote.fechaFabricacion || lote.timestampRecep)}
+                <div key={lote.idLote} className="list-row py-1.5 flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex items-center gap-2">
+                    {lote.familia && (
+                      <span className="shrink-0 text-[9px] font-ticket font-semibold uppercase tracking-wider text-ink-soft bg-paper-sunken px-1.5 py-0.5">
+                        {lote.familia}
                       </span>
-                      {lote.venc && <span>vence {formatFecha(lote.venc)}</span>}
-                    </div>
+                    )}
+                    <h4 className="text-sm font-semibold text-ink truncate">{lote.nombreProducto}</h4>
+                    <span className="shrink-0 text-[11px] font-ticket text-ink-soft">
+                      fab {formatFecha(lote.fechaFabricacion || lote.timestampRecep)}
+                    </span>
                   </div>
 
-                  <div className="shrink-0 flex flex-col items-end gap-1.5">
-                    <span className="text-sm font-bold text-ink">{lote.cantidad ?? '—'} u.</span>
+                  <div className="shrink-0 flex items-center gap-2">
+                    <span className="text-xs font-bold text-ink">{formatCantidad(lote.cantidad, lote.unidadMedida)}</span>
                     <button
                       onClick={() => solicitarExhibir(lote)}
                       disabled={exhibiendoId === lote.idLote}
-                      className="btn-tactile h-10 px-3.5 bg-terracotta hover:bg-terracotta-dark text-white font-semibold text-xs cursor-pointer disabled:opacity-50"
+                      title={lote.esFifo ? 'Respeta el orden FIFO' : 'Hay una partida más vieja sin exhibir'}
+                      className={`btn-tactile h-9 px-3 text-white font-semibold text-xs cursor-pointer disabled:opacity-50 ${
+                        lote.esFifo ? 'bg-ok hover:bg-ok/90' : 'bg-warn hover:bg-warn/90'
+                      }`}
                     >
                       {exhibiendoId === lote.idLote ? '...' : 'Exhibir'}
                     </button>
