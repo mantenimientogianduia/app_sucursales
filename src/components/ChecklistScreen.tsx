@@ -76,7 +76,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
   }, [escaneados]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-paper text-ink pb-36 max-w-md mx-auto relative">
+    <div className="min-h-screen flex flex-col bg-paper text-ink pb-36 max-w-md md:max-w-3xl lg:max-w-5xl mx-auto relative">
       {/* CONTADOR FIJO ARRIBA */}
       <div className="ticket-perforation sticky top-0 z-30 bg-terracotta-deep text-paper-raised shadow-md">
         <div className="p-4 flex items-end justify-between">
@@ -137,7 +137,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
             initial={{ opacity: 0, y: -16, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -16, scale: 0.95 }}
-            className={`fixed top-32 left-4 right-4 z-40 p-3.5 shadow-xl text-xs font-bold text-white flex items-center justify-between border-2 max-w-md mx-auto ${
+            className={`fixed top-32 left-4 right-4 z-40 p-3.5 shadow-xl text-xs font-bold text-white flex items-center justify-between border-2 max-w-md md:max-w-3xl lg:max-w-5xl mx-auto ${
               toastMsg.type === 'match' ? 'bg-ok border-white/30' : 'bg-danger border-white/30'
             }`}
           >
@@ -148,7 +148,8 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
       </AnimatePresence>
 
       {/* LISTA */}
-      <div className="px-4 pt-3">
+      <div className="px-4 md:px-6 pt-3">
+        <div className="sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-x-6">
         <AnimatePresence>
           {esperados.map((esp, index) => {
             const escaneadosParaEsp = capturasParaEsperado(esp);
@@ -224,6 +225,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
             );
           })}
         </AnimatePresence>
+        </div>
 
         {/* NO ESPERADOS */}
         {escaneados.filter(e => !e.matched).length > 0 && (filtro === 'todos' || filtro === 'extra') && (
@@ -251,7 +253,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
       </div>
 
       {/* BARRA DE ACCIÓN FIJA */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-paper-raised border-t-2 border-ink/15 p-3 max-w-md mx-auto space-y-2 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-paper-raised border-t-2 border-ink/15 p-3 max-w-md md:max-w-3xl lg:max-w-5xl mx-auto space-y-2 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={onOpenScanner}

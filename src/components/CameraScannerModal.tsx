@@ -177,7 +177,7 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
             initial={{ opacity: 0, y: -16, scale: 0.94 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -16, scale: 0.94 }}
-            className={`fixed top-24 left-4 right-4 z-40 p-3.5 shadow-xl text-sm font-bold text-white flex items-center justify-between border-2 ${
+            className={`fixed top-24 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-full sm:max-w-md z-40 p-3.5 shadow-xl text-sm font-bold text-white flex items-center justify-between border-2 ${
               feedback.ok ? 'bg-ok border-white/30' : 'bg-danger border-white/30'
             }`}
           >

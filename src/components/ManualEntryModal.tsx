@@ -62,7 +62,7 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-ink/70 backdrop-blur-xs flex flex-col justify-end sm:justify-center p-0 sm:p-4">
-      <div className="bg-paper-raised text-ink max-w-md w-full mx-auto max-h-[90vh] flex flex-col shadow-2xl border-t-2 sm:border-2 border-ink/20 overflow-hidden">
+      <div className="bg-paper-raised text-ink max-w-md sm:max-w-lg w-full mx-auto max-h-[90vh] flex flex-col shadow-2xl border-t-2 sm:border-2 border-ink/20 overflow-hidden">
         <div className="p-4 bg-terracotta-deep text-paper-raised flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-full bg-terracotta flex items-center justify-center">

@@ -51,14 +51,14 @@ export const AdminPosicionesScreen: React.FC<AdminPosicionesScreenProps> = ({ us
   const ocupantesDe = (pos: number) => posiciones.filter((p) => p.posicion === pos);
 
   return (
-    <div className="min-h-screen flex flex-col bg-paper text-ink pb-8 max-w-lg mx-auto relative">
-      <div className="ticket-perforation bg-ink text-paper-raised px-5 pt-8 pb-6">
+    <div className="min-h-screen flex flex-col bg-paper text-ink pb-8 max-w-lg md:max-w-3xl lg:max-w-5xl mx-auto relative">
+      <div className="ticket-perforation bg-ink text-paper-raised px-5 md:px-8 pt-8 pb-6">
         <div className="flex items-center justify-between">
           <div>
             <span className="block text-[10px] font-ticket uppercase tracking-[0.2em] text-gold">
               Panel interno · {usuario.usuario}
             </span>
-            <h1 className="text-2xl font-display font-bold italic mt-0.5">Carta BACHA</h1>
+            <h1 className="text-2xl md:text-3xl font-display font-bold italic mt-0.5">Carta BACHA</h1>
           </div>
           <button
             onClick={handleLogout}
@@ -69,7 +69,7 @@ export const AdminPosicionesScreen: React.FC<AdminPosicionesScreenProps> = ({ us
         </div>
       </div>
 
-      <div className="p-4">
+      <div className="p-4 md:p-8">
         {cargando ? (
           <div className="py-16 text-center text-sm text-ink-soft">Cargando...</div>
         ) : (
@@ -104,7 +104,7 @@ export const AdminPosicionesScreen: React.FC<AdminPosicionesScreenProps> = ({ us
             )}
 
             {/* Pegboard de 21 posiciones */}
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 gap-2.5">
               {Array.from({ length: TOTAL_POSICIONES }, (_, i) => i + 1).map((pos) => {
                 const ocupantes = ocupantesDe(pos);
                 const enTransicion = ocupantes.length > 1;

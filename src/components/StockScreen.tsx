@@ -9,7 +9,7 @@ import {
   exhibirLote,
 } from '../services/apiService';
 import { TicketHeader } from './ui/TicketHeader';
-import { BottomNav, AreaPrincipal } from './ui/BottomNav';
+import { AppShell, AreaPrincipal } from './ui/AppShell';
 import { Stamp } from './ui/Stamp';
 
 interface StockScreenProps {
@@ -129,7 +129,7 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-paper text-ink pb-24 max-w-md mx-auto relative">
+    <AppShell activa="stock" onNavegar={handleNav}>
       <TicketHeader
         eyebrow="Depósito"
         title={
@@ -151,7 +151,7 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
             initial={{ opacity: 0, y: -14 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -14 }}
-            className={`fixed top-20 left-4 right-4 z-40 max-w-md mx-auto p-3 shadow-xl text-sm font-bold text-white flex items-center gap-2 border-2 border-white/30 ${
+            className={`fixed top-20 left-4 right-4 md:left-auto md:right-8 z-40 max-w-md md:w-96 mx-auto md:mx-0 p-3 shadow-xl text-sm font-bold text-white flex items-center gap-2 border-2 border-white/30 ${
               mensaje.ok ? 'bg-ok' : 'bg-danger'
             }`}
           >
@@ -161,14 +161,14 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
         )}
       </AnimatePresence>
 
-      <div className="flex-1 px-4 pt-3">
+      <div className="flex-1 px-4 md:px-6 pt-3">
         {cargando ? (
           <div className="py-16 text-center text-sm text-ink-soft">Cargando...</div>
         ) : nivel === 'familias' ? (
           familias.length === 0 ? (
             <EmptyBlock icon={<Boxes className="w-8 h-8" />} texto="No hay stock sin exhibir en el depósito." />
           ) : (
-            <div>
+            <div className="sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-x-6">
               {familias.map((f, i) => (
                 <button
                   key={f.familia || 'sin-familia'}
@@ -195,7 +195,7 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
           productos.length === 0 ? (
             <EmptyBlock icon={<PackageSearch className="w-8 h-8" />} texto="Sin productos en esta familia." />
           ) : (
-            <div>
+            <div className="sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-x-6">
               {productos.map((p) => (
                 <button
                   key={p.idProd}
@@ -217,7 +217,7 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
         ) : partidas.length === 0 ? (
           <EmptyBlock icon={<Boxes className="w-8 h-8" />} texto="No quedan partidas sin exhibir de este producto." />
         ) : (
-          <div className="space-y-2.5 pb-4">
+          <div className="space-y-2.5 sm:space-y-0 sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-3 pb-4">
             {partidas.map((lote) => (
               <div key={lote.idLote} className="card-flat p-4 flex items-center justify-between gap-3">
                 <div className="min-w-0">
@@ -287,9 +287,7 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
           </div>
         )}
       </AnimatePresence>
-
-      <BottomNav activa="stock" onNavegar={handleNav} />
-    </div>
+    </AppShell>
   );
 };
 

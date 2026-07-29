@@ -3,7 +3,7 @@ import { LayoutGrid, Package } from 'lucide-react';
 import { ExhibidoBacha, ExhibidoResto } from '../types';
 import { getExhibidora } from '../services/apiService';
 import { TicketHeader } from './ui/TicketHeader';
-import { BottomNav, AreaPrincipal } from './ui/BottomNav';
+import { AppShell, AreaPrincipal } from './ui/AppShell';
 import { HistorialProductoModal } from './HistorialProductoModal';
 
 interface ExhibidoraScreenProps {
@@ -51,10 +51,10 @@ export const ExhibidoraScreen: React.FC<ExhibidoraScreenProps> = ({ onVolver, on
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-paper text-ink pb-24 max-w-md mx-auto relative">
+    <AppShell activa="exhibidora" onNavegar={handleNav}>
       <TicketHeader eyebrow="Mostrador" title="Exhibidora" subtitle="Qué está exhibido en este local" />
 
-      <div className="flex-1 px-4 pt-4">
+      <div className="flex-1 px-4 md:px-6 pt-4">
         {error && (
           <div className="mb-4 p-3 bg-danger-tint border border-danger text-danger text-xs font-medium">
             {error}
@@ -75,7 +75,7 @@ export const ExhibidoraScreen: React.FC<ExhibidoraScreenProps> = ({ onVolver, on
             {bacha.length === 0 ? (
               <p className="text-sm text-ink-soft mb-6">No hay posiciones BACHA configuradas.</p>
             ) : (
-              <div className="grid grid-cols-3 gap-2 mb-7">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-2 mb-7">
                 {bacha
                   .slice()
                   .sort((a, b) => a.posicion - b.posicion)
@@ -110,7 +110,7 @@ export const ExhibidoraScreen: React.FC<ExhibidoraScreenProps> = ({ onVolver, on
             {resto.length === 0 ? (
               <p className="text-sm text-ink-soft py-6">No hay otros productos exhibidos actualmente.</p>
             ) : (
-              <div>
+              <div className="sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-x-6">
                 {resto.map((r) => (
                   <button
                     key={r.idLote}
@@ -137,8 +137,6 @@ export const ExhibidoraScreen: React.FC<ExhibidoraScreenProps> = ({ onVolver, on
         onClose={() => setSeleccionado(null)}
         onDesexhibido={cargar}
       />
-
-      <BottomNav activa="exhibidora" onNavegar={handleNav} />
-    </div>
+    </AppShell>
   );
 };

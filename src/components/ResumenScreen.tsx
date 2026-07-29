@@ -50,7 +50,7 @@ Firmado digitalmente por el local.
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-paper text-ink pb-28 max-w-md mx-auto">
+    <div className="min-h-screen flex flex-col bg-paper text-ink pb-28 max-w-md md:max-w-3xl lg:max-w-5xl mx-auto">
       <div className="ticket-perforation bg-terracotta-deep text-paper-raised px-5 pt-8 pb-6 text-center">
         <FileCheck className="w-8 h-8 text-terracotta mx-auto mb-1.5" />
         <span className="block text-[10px] font-ticket uppercase tracking-[0.2em] text-paper-raised/60">
@@ -62,7 +62,8 @@ Firmado digitalmente por el local.
         </p>
       </div>
 
-      <div className="p-4 space-y-3">
+      <div className="p-4 md:p-6 space-y-3">
+        <div className="md:grid md:grid-cols-3 md:gap-3 md:space-y-0 space-y-3">
         {/* RECIBIDO OK */}
         <div className="card-flat border-l-4 border-l-ok p-4">
           <div className="flex items-center gap-3">
@@ -129,6 +130,7 @@ Firmado digitalmente por el local.
             </div>
           )}
         </div>
+        </div>
 
         <button
           onClick={handleDescargarComprobante}
@@ -139,7 +141,7 @@ Firmado digitalmente por el local.
         </button>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-paper-raised border-t-2 border-ink/15 p-3 max-w-md mx-auto shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-paper-raised border-t-2 border-ink/15 p-3 max-w-md md:max-w-3xl lg:max-w-5xl mx-auto shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
         <button
           onClick={onVolverInicio}
           className="btn-tactile w-full h-14 bg-ink hover:bg-terracotta-deep text-white font-bold text-base flex items-center justify-center gap-2 cursor-pointer"
