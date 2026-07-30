@@ -398,43 +398,15 @@ export async function finalizarRecepcion(idRecepcion: number | string): Promise<
 }
 
 /**
- * Finalizar la recepción en curso (la que se está escaneando activamente).
- * Los totales del resumen se calculan acá a partir de lo que el cliente ya
- * sabe (cada escaneo fue confirmado por el servidor al agregarse), para no
- * duplicar la lógica de matching del backend.
+ * Cierra la recepción que se está escaneando activamente (la "actual" del
+ * módulo, identificada internamente por idRecepcionActual). El servidor
+ * recalcula los reclamos desde cero a partir de lo realmente persistido.
  */
-export async function enviarRecepcionFinalizada(
-  esperados: ItemEsperado[],
-  escaneados: ItemEscaneado[],
-  nombreLocal: string
-): Promise<{ ok: boolean; recepcion: RecepcionGuardada }> {
+export async function finalizarRecepcionActual(): Promise<void> {
   if (idRecepcionActual === null) {
     throw new Error('No hay una recepción en curso.');
   }
-
-  const idRecepcionCerrada = idRecepcionActual;
-  const reclamos = await finalizarRecepcion(idRecepcionCerrada);
-
-  const { totalEsperados, totalRecibidosOk, totalFaltantes, totalSinCobrar } = calcularTotales(
-    esperados,
-    escaneados
-  );
-
-  const now = new Date();
-  const recepcion: RecepcionGuardada = {
-    id: `REC-${idRecepcionCerrada}`,
-    fecha: now.toISOString().slice(0, 10),
-    hora: now.toTimeString().slice(0, 5),
-    totalesperados: totalEsperados,
-    totalRecibidosOk,
-    totalFaltantes,
-    totalSinCobrar,
-    escaneados,
-    reclamos,
-    usuarioLocal: nombreLocal,
-  };
-
-  return { ok: true, recepcion };
+  await finalizarRecepcion(idRecepcionActual);
 }
 
 /* ---------------------- Stock / Exhibidora ---------------------- */
