@@ -1,56 +1,43 @@
 import React, { useState, useEffect } from 'react';
-import {
-  ItemEsperado,
-  ItemEscaneado,
-  LocalUsuario,
-  RecepcionGuardada,
-  RecepcionResumen
-} from './types';
+import { ItemEsperado, ItemEscaneado, LocalUsuario, RecepcionResumen } from './types';
 import {
   getSesionActual,
   logoutLocal,
-  iniciarRecepcion,
   registrarEscaneoQr,
   registrarCargaManual,
-  enviarRecepcionFinalizada,
+  finalizarRecepcionActual,
   getCatalogoProductos,
   getHistorialRecepciones,
   getRecepcionHoy,
-  getRecepcionDetalle,
-  reabrirRecepcion,
-  finalizarRecepcion,
-  construirRecepcionGuardada,
-  RecepcionDetalle
+  RecepcionDiaDetalle
 } from './services/apiService';
 import { LoginScreen } from './components/LoginScreen';
 import { HomeScreen } from './components/HomeScreen';
 import { ChecklistScreen } from './components/ChecklistScreen';
-import { ResumenScreen } from './components/ResumenScreen';
+import { DiaScreen } from './components/DiaScreen';
 import { RecepcionesScreen } from './components/RecepcionesScreen';
 import { CameraScannerModal } from './components/CameraScannerModal';
 import { ManualEntryModal } from './components/ManualEntryModal';
 import { StockScreen } from './components/StockScreen';
 import { ExhibidoraScreen } from './components/ExhibidoraScreen';
 
-type PantallaNavegacion = 'login' | 'inicio' | 'checklist' | 'resumen' | 'stock' | 'exhibidora' | 'recepciones';
+type PantallaNavegacion = 'login' | 'inicio' | 'checklist' | 'dia' | 'stock' | 'exhibidora' | 'recepciones';
 
 export default function App() {
   const [pantalla, setPantalla] = useState<PantallaNavegacion>('login');
   const [local, setLocal] = useState<LocalUsuario | null>(null);
 
+  // Fecha del dia que muestra DiaScreen (el "hub" al que se entra desde
+  // cualquier fila del historial, o desde el CTA de Inicio para hoy).
+  const [fechaDia, setFechaDia] = useState<string | null>(null);
+
   // Datos de la recepción en curso (checklist)
   const [esperados, setEsperados] = useState<ItemEsperado[]>([]);
   const [escaneados, setEscaneados] = useState<ItemEscaneado[]>([]);
 
-  // Datos de la pantalla de resumen (final, preliminar, o "de hoy")
-  const [recepcionFinal, setRecepcionFinal] = useState<RecepcionGuardada | null>(null);
-  const [idRecepcionResumen, setIdRecepcionResumen] = useState<number | string | null>(null);
-  const [resumenPreliminar, setResumenPreliminar] = useState(false);
-  const [resumenPuedeReabrir, setResumenPuedeReabrir] = useState(false);
-
   // Estado autoritativo de "hoy": nada, en_curso, o cerrada. Lo resuelve el
   // servidor (GET /api/recepciones/hoy) — nunca se infiere del historial.
-  const [recepcionHoy, setRecepcionHoy] = useState<RecepcionDetalle | null>(null);
+  const [recepcionHoy, setRecepcionHoy] = useState<RecepcionDiaDetalle | null>(null);
   const [cargandoRecepcionHoy, setCargandoRecepcionHoy] = useState(false);
 
   // Historial de recepciones (últimos 7 días) para Inicio y el listado completo
@@ -73,7 +60,6 @@ export default function App() {
     getSesionActual().then((localSesion) => {
       if (active && localSesion) {
         setLocal(localSesion);
-        // Muestra directamente inicio si ya hay local
         setPantalla('inicio');
       }
     });
@@ -95,8 +81,7 @@ export default function App() {
   }, []);
 
   // Estado de "hoy" + historial de 7 días: se recargan juntos cada vez que
-  // se entra a Inicio o al listado completo, para reflejar cambios hechos
-  // desde otra pestaña/sesión.
+  // se entra a Inicio o al listado completo.
   useEffect(() => {
     if (!local || (pantalla !== 'inicio' && pantalla !== 'recepciones')) return;
     let active = true;
@@ -144,91 +129,24 @@ export default function App() {
       .finally(() => setCargandoProductos(false));
   };
 
-  // Arma la pantalla de Resumen (final, o preliminar si es una recepción
-  // en_curso abandonada de un día anterior) a partir de un detalle ya
-  // resuelto por el servidor.
-  const mostrarResumenDesdeDetalle = (detalle: RecepcionDetalle) => {
-    if (!local || !detalle.recepcion) return;
-    const { recepcion, esperados: esp, escaneados: esc, reclamos } = detalle;
-
-    const abandonada = recepcion.estado === 'en_curso' && !recepcion.editable;
-    const puedeReabrir = recepcion.estado === 'cerrada' && recepcion.fecha === recepcionHoy?.recepcion?.fecha;
-
-    setIdRecepcionResumen(recepcion.idRecepcion);
-    setResumenPreliminar(abandonada);
-    setResumenPuedeReabrir(puedeReabrir);
-    setRecepcionFinal(construirRecepcionGuardada(recepcion, esp, esc, reclamos, local.nombreLocal));
-    setPantalla('resumen');
+  // Abrir la pantalla "Día" para una fecha puntual: viene del CTA de hoy en
+  // Inicio, o de cualquier fila del historial/listado completo.
+  const handleAbrirDia = (fecha: string) => {
+    setFechaDia(fecha);
+    setPantalla('dia');
   };
 
-  // Punto de entrada común: si la recepción es editable (en_curso y de
-  // hoy), entra al checklist para seguir escaneando; si no, muestra el
-  // resumen (final o preliminar según corresponda).
-  const abrirDesdeDetalle = (detalle: RecepcionDetalle) => {
-    if (!detalle.recepcion) return;
-    setRecepcionFinal(null);
-
-    if (detalle.recepcion.editable) {
-      setEsperados(detalle.esperados);
-      setEscaneados(detalle.escaneados);
-      setPantalla('checklist');
-      cargarCatalogoProductos();
-      return;
-    }
-
-    mostrarResumenDesdeDetalle(detalle);
+  const handleAbrirDiaDeHoy = () => {
+    if (recepcionHoy) handleAbrirDia(recepcionHoy.fecha);
   };
 
-  // Iniciar (o recuperar, de forma idempotente) la recepción de hoy.
-  const handleIniciarRecepcion = async () => {
-    try {
-      const detalle = await iniciarRecepcion();
-      abrirDesdeDetalle(detalle);
-    } catch (err: any) {
-      alert(err.message || 'No se pudo iniciar la recepción.');
-    }
-  };
-
-  // CTA de Inicio cuando ya hay algo para hoy: usa el detalle que ya se
-  // trajo con GET /api/recepciones/hoy, sin otra ida y vuelta al servidor.
-  const handleAbrirRecepcionHoy = () => {
-    if (recepcionHoy) abrirDesdeDetalle(recepcionHoy);
-  };
-
-  // Abrir una recepción puntual desde el historial (puede ser de hoy o de
-  // un día anterior, en_curso o cerrada).
-  const handleAbrirRecepcion = async (resumen: RecepcionResumen) => {
-    try {
-      const detalle = await getRecepcionDetalle(resumen.idRecepcion);
-      abrirDesdeDetalle(detalle);
-    } catch (err: any) {
-      alert(err.message || 'No se pudo abrir la recepción.');
-    }
-  };
-
-  // Reabrir la recepción de hoy (ya cerrada) para seguir escaneando.
-  const handleReabrir = async () => {
-    if (idRecepcionResumen === null) return;
-    try {
-      const detalle = await reabrirRecepcion(idRecepcionResumen);
-      abrirDesdeDetalle(detalle);
-    } catch (err: any) {
-      alert(err.message || 'No se pudo reabrir la recepción.');
-    }
-  };
-
-  // Cerrar ahora una recepción abandonada de un día anterior: la finaliza
-  // (persistiendo reclamos de verdad) y refresca el resumen a la versión
-  // final.
-  const handleCerrarAhora = async () => {
-    if (idRecepcionResumen === null) return;
-    try {
-      await finalizarRecepcion(idRecepcionResumen);
-      const detalleActualizado = await getRecepcionDetalle(idRecepcionResumen);
-      mostrarResumenDesdeDetalle(detalleActualizado);
-    } catch (err: any) {
-      alert(err.message || 'No se pudo cerrar la recepción.');
-    }
+  // DiaScreen ya trajo esperados/escaneados (via iniciar, continuar o
+  // reabrir) — solo queda mostrarlos en el checklist.
+  const handleIrAChecklist = (esp: ItemEsperado[], esc: ItemEscaneado[]) => {
+    setEsperados(esp);
+    setEscaneados(esc);
+    setPantalla('checklist');
+    cargarCatalogoProductos();
   };
 
   // Agregar un item ya confirmado por el servidor a la lista visual.
@@ -277,19 +195,13 @@ export default function App() {
     }
   };
 
-  // Finalizar la recepción que se está escaneando activamente. Al terminar
-  // queda como la recepción cerrada de hoy, así que siempre admite reabrir.
+  // Finalizar la recepción que se está escaneando activamente. Vuelve a la
+  // pantalla "Día" (misma fecha), que se re-consulta sola al montar y ya
+  // muestra el comprobante final con la opción de reabrir.
   const handleFinalizarRecepcion = async () => {
-    if (!local) return;
     try {
-      const res = await enviarRecepcionFinalizada(esperados, escaneados, local.nombreLocal);
-      if (res.ok) {
-        setIdRecepcionResumen(res.recepcion.id.replace('REC-', ''));
-        setResumenPreliminar(false);
-        setResumenPuedeReabrir(true);
-        setRecepcionFinal(res.recepcion);
-        setPantalla('resumen');
-      }
+      await finalizarRecepcionActual();
+      setPantalla('dia');
     } catch (err: any) {
       alert(err.message || 'No se pudo finalizar la recepción.');
     }
@@ -297,12 +209,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-paper text-ink selection:bg-terracotta selection:text-white">
-      {/* 1. Pantalla de Login */}
-      {pantalla === 'login' && (
-        <LoginScreen onLoginSuccess={handleLoginSuccess} />
-      )}
+      {pantalla === 'login' && <LoginScreen onLoginSuccess={handleLoginSuccess} />}
 
-      {/* 2. Pantalla Inicio */}
       {pantalla === 'inicio' && local && (
         <HomeScreen
           local={local}
@@ -310,9 +218,8 @@ export default function App() {
           cargandoRecepcionHoy={cargandoRecepcionHoy}
           historial={historial}
           cargandoHistorial={cargandoHistorial}
-          onIniciarRecepcion={handleIniciarRecepcion}
-          onAbrirRecepcionHoy={handleAbrirRecepcionHoy}
-          onAbrirRecepcion={handleAbrirRecepcion}
+          onAbrirDiaDeHoy={handleAbrirDiaDeHoy}
+          onAbrirDia={handleAbrirDia}
           onVerHistorialCompleto={() => setPantalla('recepciones')}
           onIrAStock={() => setPantalla('stock')}
           onIrAExhibidora={() => setPantalla('exhibidora')}
@@ -320,33 +227,32 @@ export default function App() {
         />
       )}
 
-      {/* Listado completo de recepciones recientes */}
       {pantalla === 'recepciones' && (
         <RecepcionesScreen
           recepciones={historial}
           cargando={cargandoHistorial}
           onVolver={() => setPantalla('inicio')}
-          onAbrir={handleAbrirRecepcion}
+          onAbrir={handleAbrirDia}
         />
       )}
 
-      {/* Stock del depósito */}
       {pantalla === 'stock' && (
-        <StockScreen
-          onVolver={() => setPantalla('inicio')}
-          onIrAExhibidora={() => setPantalla('exhibidora')}
-        />
+        <StockScreen onVolver={() => setPantalla('inicio')} onIrAExhibidora={() => setPantalla('exhibidora')} />
       )}
 
-      {/* Exhibidora */}
       {pantalla === 'exhibidora' && (
-        <ExhibidoraScreen
+        <ExhibidoraScreen onVolver={() => setPantalla('inicio')} onIrAStock={() => setPantalla('stock')} />
+      )}
+
+      {pantalla === 'dia' && fechaDia && local && (
+        <DiaScreen
+          fecha={fechaDia}
+          nombreLocal={local.nombreLocal}
           onVolver={() => setPantalla('inicio')}
-          onIrAStock={() => setPantalla('stock')}
+          onIrAChecklist={handleIrAChecklist}
         />
       )}
 
-      {/* 3. Pantalla Checklist en Vivo */}
       {pantalla === 'checklist' && (
         <ChecklistScreen
           esperados={esperados}
@@ -354,23 +260,10 @@ export default function App() {
           onOpenScanner={() => setIsScannerOpen(true)}
           onOpenManual={() => setIsManualOpen(true)}
           onFinalizar={handleFinalizarRecepcion}
-          onVolver={() => setPantalla('inicio')}
+          onVolver={() => setPantalla('dia')}
         />
       )}
 
-      {/* 4. Pantalla Resumen (final, preliminar, o de hoy) */}
-      {pantalla === 'resumen' && recepcionFinal && (
-        <ResumenScreen
-          recepcion={recepcionFinal}
-          preliminar={resumenPreliminar}
-          onCerrarAhora={handleCerrarAhora}
-          puedeReabrir={resumenPuedeReabrir}
-          onReabrir={handleReabrir}
-          onVolverInicio={() => setPantalla('inicio')}
-        />
-      )}
-
-      {/* Modal Cámara QR — escaneo continuo, se cierra solo con "Listo" */}
       <CameraScannerModal
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
@@ -378,7 +271,6 @@ export default function App() {
         totalEscaneados={escaneados.length}
       />
 
-      {/* Modal Carga Manual */}
       <ManualEntryModal
         isOpen={isManualOpen}
         onClose={() => setIsManualOpen(false)}
