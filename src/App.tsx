@@ -295,6 +295,7 @@ export default function App() {
           onOpenScanner={() => setIsScannerOpen(true)}
           onOpenManual={() => setIsManualOpen(true)}
           onFinalizar={handleFinalizarRecepcion}
+          onVolver={() => setPantalla('inicio')}
         />
       )}
 

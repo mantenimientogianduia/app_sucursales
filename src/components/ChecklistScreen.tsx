@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   Clock,
   ArrowRight,
+  ArrowLeft,
 } from 'lucide-react';
 import { ItemEsperado, ItemEscaneado } from '../types';
 import { Stamp } from './ui/Stamp';
@@ -17,6 +18,7 @@ interface ChecklistScreenProps {
   onOpenScanner: () => void;
   onOpenManual: () => void;
   onFinalizar: () => void;
+  onVolver: () => void;
 }
 
 export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
@@ -25,6 +27,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
   onOpenScanner,
   onOpenManual,
   onFinalizar,
+  onVolver,
 }) => {
   const [filtro, setFiltro] = useState<'todos' | 'pendientes' | 'coinciden' | 'extra'>('todos');
   const [toastMsg, setToastMsg] = useState<{ text: string; type: 'match' | 'extra' } | null>(null);
@@ -81,6 +84,13 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
       <div className="ticket-perforation sticky top-0 z-30 bg-terracotta-deep text-paper-raised shadow-md">
         <div className="p-4 flex items-end justify-between">
           <div>
+            <button
+              onClick={onVolver}
+              title="Volver a Inicio (la recepción queda guardada)"
+              className="btn-tactile w-8 h-8 -ml-1 mb-2 rounded-full bg-black/15 hover:bg-black/25 flex items-center justify-center cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
             <span className="text-[10px] font-ticket font-semibold uppercase tracking-[0.14em] text-paper-raised/60 block">
               Progreso de recepción
             </span>
