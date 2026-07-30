@@ -3,7 +3,8 @@ import {
   ItemEsperado,
   ItemEscaneado,
   LocalUsuario,
-  RecepcionGuardada
+  RecepcionGuardada,
+  RecepcionResumen
 } from './types';
 import {
   getSesionActual,
@@ -12,18 +13,22 @@ import {
   registrarEscaneoQr,
   registrarCargaManual,
   enviarRecepcionFinalizada,
-  getCatalogoProductos
+  getCatalogoProductos,
+  getHistorialRecepciones,
+  getRecepcionDetalle,
+  calcularTotales
 } from './services/apiService';
 import { LoginScreen } from './components/LoginScreen';
 import { HomeScreen } from './components/HomeScreen';
 import { ChecklistScreen } from './components/ChecklistScreen';
 import { ResumenScreen } from './components/ResumenScreen';
+import { RecepcionesScreen } from './components/RecepcionesScreen';
 import { CameraScannerModal } from './components/CameraScannerModal';
 import { ManualEntryModal } from './components/ManualEntryModal';
 import { StockScreen } from './components/StockScreen';
 import { ExhibidoraScreen } from './components/ExhibidoraScreen';
 
-type PantallaNavegacion = 'login' | 'inicio' | 'checklist' | 'resumen' | 'stock' | 'exhibidora';
+type PantallaNavegacion = 'login' | 'inicio' | 'checklist' | 'resumen' | 'stock' | 'exhibidora' | 'recepciones';
 
 export default function App() {
   const [pantalla, setPantalla] = useState<PantallaNavegacion>('login');
@@ -33,6 +38,10 @@ export default function App() {
   const [esperados, setEsperados] = useState<ItemEsperado[]>([]);
   const [escaneados, setEscaneados] = useState<ItemEscaneado[]>([]);
   const [recepcionFinal, setRecepcionFinal] = useState<RecepcionGuardada | null>(null);
+
+  // Historial de recepciones (últimos 7 días) para Inicio y el listado completo
+  const [historial, setHistorial] = useState<RecepcionResumen[]>([]);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
 
   // Catálogo de productos para la carga manual (Carga Manual busca acá)
   const [productos, setProductos] = useState<
@@ -71,6 +80,28 @@ export default function App() {
     return () => window.removeEventListener('sesion-local-expirada', handleSesionExpirada);
   }, []);
 
+  // Historial de recepciones: se recarga cada vez que se entra a Inicio o al
+  // listado completo, para reflejar cambios hechos desde otra pestaña/sesión
+  // (por ejemplo, otra persona finalizando la recepción en curso).
+  useEffect(() => {
+    if (!local || (pantalla !== 'inicio' && pantalla !== 'recepciones')) return;
+    let active = true;
+    setCargandoHistorial(true);
+    getHistorialRecepciones()
+      .then((data) => {
+        if (active) setHistorial(data);
+      })
+      .catch(() => {
+        if (active) setHistorial([]);
+      })
+      .finally(() => {
+        if (active) setCargandoHistorial(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [local, pantalla]);
+
   // Handlers de navegación y autenticación
   const handleLoginSuccess = (localAuth: LocalUsuario) => {
     setLocal(localAuth);
@@ -83,12 +114,14 @@ export default function App() {
     setPantalla('login');
   };
 
-  // Iniciar una nueva recepción: la crea en el servidor y trae lo esperado hoy
+  // Iniciar una nueva recepción (o reanudar la de hoy si ya había una en
+  // curso): la crea/reutiliza en el servidor y trae lo esperado + lo ya
+  // escaneado.
   const handleIniciarRecepcion = async () => {
     try {
-      const dataEsperados = await iniciarRecepcion();
+      const { esperados: dataEsperados, escaneados: dataEscaneados } = await iniciarRecepcion();
       setEsperados(dataEsperados);
-      setEscaneados([]);
+      setEscaneados(dataEscaneados);
       setRecepcionFinal(null);
       setPantalla('checklist');
 
@@ -99,6 +132,50 @@ export default function App() {
         .finally(() => setCargandoProductos(false));
     } catch (err: any) {
       alert(err.message || 'No se pudo iniciar la recepción.');
+    }
+  };
+
+  // Abrir una recepción puntual desde el historial: si sigue en_curso, entra
+  // al checklist para seguir escaneando; si ya está cerrada, arma el resumen
+  // guardado y lo muestra tal como si se acabara de finalizar.
+  const handleAbrirRecepcion = async (resumen: RecepcionResumen) => {
+    try {
+      const detalle = await getRecepcionDetalle(resumen.idRecepcion);
+      setRecepcionFinal(null);
+
+      if (detalle.estado === 'en_curso') {
+        setEsperados(detalle.esperados);
+        setEscaneados(detalle.escaneados);
+        setPantalla('checklist');
+
+        setCargandoProductos(true);
+        getCatalogoProductos()
+          .then(setProductos)
+          .catch(() => setProductos([]))
+          .finally(() => setCargandoProductos(false));
+        return;
+      }
+
+      const totales = calcularTotales(detalle.esperados, detalle.escaneados);
+      const hora = resumen.timestampFin
+        ? new Date(resumen.timestampFin).toTimeString().slice(0, 5)
+        : new Date(resumen.timestampInicio).toTimeString().slice(0, 5);
+
+      setRecepcionFinal({
+        id: `REC-${resumen.idRecepcion}`,
+        fecha: resumen.fecha,
+        hora,
+        totalesperados: totales.totalEsperados,
+        totalRecibidosOk: totales.totalRecibidosOk,
+        totalFaltantes: totales.totalFaltantes,
+        totalSinCobrar: totales.totalSinCobrar,
+        escaneados: detalle.escaneados,
+        reclamos: detalle.reclamos,
+        usuarioLocal: local?.nombreLocal || '',
+      });
+      setPantalla('resumen');
+    } catch (err: any) {
+      alert(err.message || 'No se pudo abrir la recepción.');
     }
   };
 
@@ -173,10 +250,24 @@ export default function App() {
       {pantalla === 'inicio' && local && (
         <HomeScreen
           local={local}
+          historial={historial}
+          cargandoHistorial={cargandoHistorial}
           onIniciarRecepcion={handleIniciarRecepcion}
+          onAbrirRecepcion={handleAbrirRecepcion}
+          onVerHistorialCompleto={() => setPantalla('recepciones')}
           onIrAStock={() => setPantalla('stock')}
           onIrAExhibidora={() => setPantalla('exhibidora')}
           onLogout={handleLogout}
+        />
+      )}
+
+      {/* Listado completo de recepciones recientes */}
+      {pantalla === 'recepciones' && (
+        <RecepcionesScreen
+          recepciones={historial}
+          cargando={cargandoHistorial}
+          onVolver={() => setPantalla('inicio')}
+          onAbrir={handleAbrirRecepcion}
         />
       )}
 

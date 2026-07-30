@@ -56,6 +56,18 @@ export type RecepcionGuardada = {
   usuarioLocal: string;
 };
 
+// Fila liviana del historial de recepciones (lista de últimos N días)
+export type RecepcionResumen = {
+  idRecepcion: number | string;
+  fecha: string;
+  timestampInicio: string;
+  timestampFin: string | null;
+  estado: "en_curso" | "cerrada";
+  totalEscaneados: number;
+  totalFaltantes: number;
+  totalSinCobrar: number;
+};
+
 /* ---------------------- Stock / Exhibidora ---------------------- */
 
 // Partida sin exhibir con su producto/familia embebidos, para el buscador

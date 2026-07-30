@@ -4,6 +4,7 @@ import {
   Reclamo,
   LocalUsuario,
   RecepcionGuardada,
+  RecepcionResumen,
   PartidaConStock,
   ExhibidoBacha,
   ExhibidoResto,
@@ -107,21 +108,76 @@ export async function logoutLocal(): Promise<void> {
   idRecepcionActual = null;
 }
 
-/**
- * Iniciar una recepción nueva: crea la cabecera en el servidor y devuelve
- * lo esperado hoy para este cliente (calculado desde g360.f_ventas).
- */
-export async function iniciarRecepcion(): Promise<ItemEsperado[]> {
-  const data = await apiFetch('/api/recepciones', { method: 'POST' });
-  idRecepcionActual = data.idRecepcion;
-  return (data.esperado || []).map((e: any) => ({
+function mapEsperadoRow(e: any): ItemEsperado {
+  return {
     idProd: e.idProd,
     nombreProducto: e.nombreProducto || e.idProd,
     categoria: null,
     partida: e.partida,
     cantidad: e.cantidad,
     venc: e.venc,
-  }));
+  };
+}
+
+// Misma regla de matching que usa el backend (checklist.js): una captura con
+// partida solo matchea un esperado con esa misma partida; una captura sin
+// partida matchea por producto contra un esperado tambien sin partida. Hace
+// falta reproducirla acá porque listLotesDeRecepcion no devuelve un flag
+// "matched" precalculado — solo la respuesta del POST de escaneo lo trae.
+function calcularMatched(fila: { idProd: string; partida: string | null }, esperados: ItemEsperado[]): boolean {
+  return fila.partida
+    ? esperados.some((e) => e.partida === fila.partida)
+    : esperados.some((e) => e.idProd === fila.idProd && !e.partida);
+}
+
+function mapEscaneadoRow(row: any, esperados: ItemEsperado[]): ItemEscaneado {
+  return {
+    id: String(row.idLote),
+    idProd: row.idProd,
+    nombreProducto: row.nombreProducto || row.idProd,
+    partida: row.partida ?? null,
+    cantidad: row.cantidad,
+    venc: row.venc ?? null,
+    origenCarga: row.origenCarga,
+    matched: calcularMatched(row, esperados),
+    timestamp: row.timestampRecep ? new Date(row.timestampRecep).toTimeString().slice(0, 5) : '',
+  };
+}
+
+/**
+ * Totales de una recepción a partir de lo esperado y lo efectivamente
+ * escaneado. Se usa tanto al finalizar una recepción nueva como al abrir
+ * una ya cerrada desde el historial.
+ */
+export function calcularTotales(esperados: ItemEsperado[], escaneados: ItemEscaneado[]) {
+  let totalRecibidosOk = 0;
+  esperados.forEach((esp) => {
+    const sumEscaneado = escaneados
+      .filter((esc) => esc.idProd === esp.idProd)
+      .reduce((acc, cur) => acc + cur.cantidad, 0);
+    totalRecibidosOk += Math.min(sumEscaneado, esp.cantidad);
+  });
+
+  const totalEsperados = esperados.reduce((acc, e) => acc + e.cantidad, 0);
+  const totalFaltantes = Math.max(0, totalEsperados - totalRecibidosOk);
+  const totalSinCobrar = escaneados
+    .filter((e) => !e.matched)
+    .reduce((acc, e) => acc + e.cantidad, 0);
+
+  return { totalEsperados, totalRecibidosOk, totalFaltantes, totalSinCobrar };
+}
+
+/**
+ * Iniciar (o reanudar, si ya habia una en_curso hoy) una recepción: crea o
+ * reutiliza la cabecera en el servidor y devuelve lo esperado hoy y lo que
+ * ya se hubiera escaneado si se está reanudando.
+ */
+export async function iniciarRecepcion(): Promise<{ esperados: ItemEsperado[]; escaneados: ItemEscaneado[] }> {
+  const data = await apiFetch('/api/recepciones', { method: 'POST' });
+  idRecepcionActual = data.idRecepcion;
+  const esperados = (data.esperado || []).map(mapEsperadoRow);
+  const escaneados = (data.escaneado || []).map((row: any) => mapEscaneadoRow(row, esperados));
+  return { esperados, escaneados };
 }
 
 /**
@@ -135,11 +191,43 @@ export async function getCatalogoProductos(): Promise<
 }
 
 /**
- * Historial de recepciones finalizadas. El backend todavía no expone un
- * endpoint de historial (fuera de alcance de este módulo) — devuelve vacío.
+ * Historial liviano de recepciones (en curso o cerradas) de los últimos
+ * `dias` días, para la pantalla de Inicio y el listado completo.
  */
-export async function getHistorialRecepciones(): Promise<RecepcionGuardada[]> {
-  return [];
+export async function getHistorialRecepciones(dias: number = 7): Promise<RecepcionResumen[]> {
+  const data = await apiFetch(`/api/recepciones?dias=${dias}`);
+  return data.recepciones || [];
+}
+
+/**
+ * Detalle completo de una recepción puntual: lo esperado, lo escaneado y
+ * (si ya está cerrada) los reclamos generados. Si la recepción sigue
+ * en_curso, la marca como la recepción activa para poder seguir
+ * escaneando/finalizarla.
+ */
+export async function getRecepcionDetalle(idRecepcion: number | string): Promise<{
+  estado: 'en_curso' | 'cerrada';
+  esperados: ItemEsperado[];
+  escaneados: ItemEscaneado[];
+  reclamos: Reclamo[];
+}> {
+  const data = await apiFetch(`/api/recepciones/${idRecepcion}`);
+  const esperados = (data.esperado || []).map(mapEsperadoRow);
+  const escaneados = (data.escaneado || []).map((row: any) => mapEscaneadoRow(row, esperados));
+  const reclamos: Reclamo[] = (data.reclamos || []).map((r: any) => ({
+    tipo: r.tipo,
+    idProd: r.idProd,
+    nombreProducto: r.nombreProducto || r.idProd,
+    partida: r.partida ?? null,
+    detalle: r.detalle,
+  }));
+
+  const estado = data.recepcion.estado as 'en_curso' | 'cerrada';
+  if (estado === 'en_curso') {
+    idRecepcionActual = data.recepcion.idRecepcion;
+  }
+
+  return { estado, esperados, escaneados, reclamos };
 }
 
 function mapEscaneoResponse(data: any): ItemEscaneado {
@@ -220,19 +308,10 @@ export async function enviarRecepcionFinalizada(
     detalle: r.detalle,
   }));
 
-  let totalRecibidosOk = 0;
-  esperados.forEach((esp) => {
-    const sumEscaneado = escaneados
-      .filter((esc) => esc.idProd === esp.idProd)
-      .reduce((acc, cur) => acc + cur.cantidad, 0);
-    totalRecibidosOk += Math.min(sumEscaneado, esp.cantidad);
-  });
-
-  const totalEsperados = esperados.reduce((acc, e) => acc + e.cantidad, 0);
-  const totalFaltantes = Math.max(0, totalEsperados - totalRecibidosOk);
-  const totalSinCobrar = escaneados
-    .filter((e) => !e.matched)
-    .reduce((acc, e) => acc + e.cantidad, 0);
+  const { totalEsperados, totalRecibidosOk, totalFaltantes, totalSinCobrar } = calcularTotales(
+    esperados,
+    escaneados
+  );
 
   const now = new Date();
   const recepcion: RecepcionGuardada = {

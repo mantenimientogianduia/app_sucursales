@@ -1,19 +1,40 @@
 import React from 'react';
-import { PackagePlus, PackageSearch, LayoutGrid, LogOut, ChevronRight } from 'lucide-react';
-import { LocalUsuario } from '../types';
+import { PackagePlus, PackageSearch, LayoutGrid, LogOut, ChevronRight, Clock, ClipboardList } from 'lucide-react';
+import { LocalUsuario, RecepcionResumen } from '../types';
 import { AppShell, AreaPrincipal } from './ui/AppShell';
 
 interface HomeScreenProps {
   local: LocalUsuario;
+  historial: RecepcionResumen[];
+  cargandoHistorial: boolean;
   onIniciarRecepcion: () => void;
+  onAbrirRecepcion: (recepcion: RecepcionResumen) => void;
+  onVerHistorialCompleto: () => void;
   onIrAStock: () => void;
   onIrAExhibidora: () => void;
   onLogout: () => void;
 }
 
+function formatFechaCorta(fechaIso: string): string {
+  const hoy = new Date();
+  const hoyStr = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+  const ayer = new Date(hoy);
+  ayer.setDate(ayer.getDate() - 1);
+  const ayerStr = `${ayer.getFullYear()}-${String(ayer.getMonth() + 1).padStart(2, '0')}-${String(ayer.getDate()).padStart(2, '0')}`;
+
+  if (fechaIso === hoyStr) return 'Hoy';
+  if (fechaIso === ayerStr) return 'Ayer';
+  const [, m, d] = fechaIso.split('-');
+  return `${d}/${m}`;
+}
+
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   local,
+  historial,
+  cargandoHistorial,
   onIniciarRecepcion,
+  onAbrirRecepcion,
+  onVerHistorialCompleto,
   onIrAStock,
   onIrAExhibidora,
   onLogout,
@@ -22,6 +43,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     if (area === 'stock') onIrAStock();
     if (area === 'exhibidora') onIrAExhibidora();
   };
+
+  const recepcionPendiente = historial.find((r) => r.estado === 'en_curso') || null;
+  const recientes = historial.slice(0, 4);
 
   return (
     <AppShell activa="inicio" onNavegar={handleNav}>
@@ -50,19 +74,27 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         {/* Accesos principales: fila horizontal en mobile, grilla pareja desde md */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
           <button
-            onClick={onIniciarRecepcion}
-            className="btn-tactile md:col-span-1 bg-terracotta hover:bg-terracotta-dark text-white p-5 flex items-center md:flex-col md:items-start gap-4 md:gap-6 cursor-pointer group shadow-md md:justify-between"
+            onClick={() => (recepcionPendiente ? onAbrirRecepcion(recepcionPendiente) : onIniciarRecepcion())}
+            className={`btn-tactile md:col-span-1 text-white p-5 flex items-center md:flex-col md:items-start gap-4 md:gap-6 cursor-pointer group shadow-md md:justify-between ${
+              recepcionPendiente ? 'bg-warn hover:brightness-95' : 'bg-terracotta hover:bg-terracotta-dark'
+            }`}
             style={{ minHeight: '104px' }}
           >
             <div className="w-14 h-14 rounded-full bg-white/15 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-              <PackagePlus className="w-7 h-7 text-white" />
+              {recepcionPendiente ? (
+                <Clock className="w-7 h-7 text-white" />
+              ) : (
+                <PackagePlus className="w-7 h-7 text-white" />
+              )}
             </div>
             <div className="text-left min-w-0">
               <span className="block text-lg font-display font-bold leading-tight">
-                Iniciar recepción de hoy
+                {recepcionPendiente ? 'Continuar recepción' : 'Iniciar recepción de hoy'}
               </span>
               <span className="text-xs text-white/80 font-medium">
-                Lista esperada + escáner QR de fábrica
+                {recepcionPendiente
+                  ? `${recepcionPendiente.totalEscaneados} partidas ya escaneadas`
+                  : 'Lista esperada + escáner QR de fábrica'}
               </span>
             </div>
             <ChevronRight className="w-5 h-5 ml-auto md:ml-0 shrink-0 opacity-70" />
@@ -95,6 +127,65 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </span>
             <span className="text-[11px] text-ink-soft text-left">Qué está exhibido ahora</span>
           </button>
+        </div>
+
+        {/* Recepciones recientes */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xs font-display font-bold uppercase tracking-wider text-ink-soft">
+              Recepciones recientes
+            </h2>
+            {historial.length > 0 && (
+              <button
+                onClick={onVerHistorialCompleto}
+                className="text-[11px] font-ticket font-semibold text-terracotta hover:underline cursor-pointer"
+              >
+                Ver todas
+              </button>
+            )}
+          </div>
+
+          {cargandoHistorial && (
+            <div className="text-center text-xs text-ink-soft py-4">Cargando…</div>
+          )}
+
+          {!cargandoHistorial && recientes.length === 0 && (
+            <div className="card-flat p-4 flex items-center gap-3 text-ink-soft">
+              <ClipboardList className="w-5 h-5 shrink-0 opacity-50" />
+              <span className="text-xs">No hay recepciones guardadas en los últimos 7 días.</span>
+            </div>
+          )}
+
+          {!cargandoHistorial && recientes.length > 0 && (
+            <div className="space-y-1.5">
+              {recientes.map((r) => {
+                const enCurso = r.estado === 'en_curso';
+                return (
+                  <button
+                    key={String(r.idRecepcion)}
+                    onClick={() => onAbrirRecepcion(r)}
+                    className="btn-tactile card-flat w-full p-3 flex items-center gap-3 cursor-pointer text-left"
+                  >
+                    <span className="text-[10px] font-ticket uppercase text-ink-soft w-9 shrink-0">
+                      {formatFechaCorta(r.fecha)}
+                    </span>
+                    <span
+                      className={`text-[10px] font-ticket font-bold uppercase tracking-wide px-1.5 py-0.5 shrink-0 ${
+                        enCurso ? 'bg-warn-tint text-warn' : 'bg-sage-tint text-sage-dark'
+                      }`}
+                    >
+                      {enCurso ? 'En curso' : 'Cerrada'}
+                    </span>
+                    <span className="text-xs text-ink flex-1 truncate">
+                      {r.totalEscaneados} partida{r.totalEscaneados === 1 ? '' : 's'} escaneada
+                      {r.totalEscaneados === 1 ? '' : 's'}
+                    </span>
+                    <ChevronRight className="w-4 h-4 text-ink-soft/50 shrink-0" />
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="text-center text-[11px] font-ticket text-ink-soft/60 tracking-wide pt-4 border-t border-ink/10">
