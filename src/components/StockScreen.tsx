@@ -308,9 +308,12 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
 
                   {grupo.partidas.map((lote) => (
                     <div key={lote.idLote} className="list-row py-1.5 px-3 flex items-center justify-between gap-3">
-                      <span className="text-[11px] font-ticket text-ink-soft">
-                        fab {formatFecha(lote.fechaFabricacion || lote.timestampRecep)}
-                      </span>
+                      <div className="min-w-0 flex items-baseline gap-1.5">
+                        <span className="text-[10px] font-ticket text-ink-soft/60 truncate">{lote.nombreProducto}</span>
+                        <span className="shrink-0 text-[11px] font-ticket text-ink font-medium">
+                          fab {formatFecha(lote.fechaFabricacion || lote.timestampRecep)}
+                        </span>
+                      </div>
 
                       <div className="shrink-0 flex items-center gap-2">
                         <span className="text-xs font-bold text-ink">{formatCantidad(lote.cantidad, lote.unidadMedida)}</span>
