@@ -10,18 +10,17 @@ import {
   ClipboardList,
 } from 'lucide-react';
 import { LocalUsuario, RecepcionResumen } from '../types';
-import { RecepcionDetalle } from '../services/apiService';
+import { RecepcionDiaDetalle } from '../services/apiService';
 import { AppShell, AreaPrincipal } from './ui/AppShell';
 
 interface HomeScreenProps {
   local: LocalUsuario;
-  recepcionHoy: RecepcionDetalle | null;
+  recepcionHoy: RecepcionDiaDetalle | null;
   cargandoRecepcionHoy: boolean;
   historial: RecepcionResumen[];
   cargandoHistorial: boolean;
-  onIniciarRecepcion: () => void;
-  onAbrirRecepcionHoy: () => void;
-  onAbrirRecepcion: (recepcion: RecepcionResumen) => void;
+  onAbrirDiaDeHoy: () => void;
+  onAbrirDia: (fecha: string) => void;
   onVerHistorialCompleto: () => void;
   onIrAStock: () => void;
   onIrAExhibidora: () => void;
@@ -47,9 +46,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   cargandoRecepcionHoy,
   historial,
   cargandoHistorial,
-  onIniciarRecepcion,
-  onAbrirRecepcionHoy,
-  onAbrirRecepcion,
+  onAbrirDiaDeHoy,
+  onAbrirDia,
   onVerHistorialCompleto,
   onIrAStock,
   onIrAExhibidora,
@@ -64,8 +62,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   // El estado de "hoy" (nada / en_curso / cerrada) lo resuelve el servidor
   // via GET /api/recepciones/hoy — no se infiere revisando el historial de
-  // 7 días, porque eso podía enganchar una recepción en_curso abandonada de
-  // un día viejo y ofrecer "continuarla" por error.
+  // 7 días.
   const estadoHoy = recepcionHoy?.recepcion?.estado ?? null;
   const totalEscaneadosHoy = recepcionHoy?.escaneados.length ?? 0;
 
@@ -73,20 +70,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   let ctaSub = 'Lista esperada + escáner QR de fábrica';
   let ctaBg = 'bg-terracotta hover:bg-terracotta-dark';
   let ctaIcon = <PackagePlus className="w-7 h-7 text-white" />;
-  let ctaOnClick = onIniciarRecepcion;
 
   if (estadoHoy === 'en_curso') {
     ctaLabel = 'Continuar recepción';
-    ctaSub = `${totalEscaneadosHoy} partida${totalEscaneadosHoy === 1 ? '' : 's'} ya escaneada${totalEscaneadosHoy === 1 ? '' : 's'}`;
+    ctaSub = `${totalEscaneadosHoy} partida${totalEscaneadosHoy === 1 ? '' : 's'} ya escaneada${
+      totalEscaneadosHoy === 1 ? '' : 's'
+    }`;
     ctaBg = 'bg-warn hover:brightness-95';
     ctaIcon = <Clock className="w-7 h-7 text-white" />;
-    ctaOnClick = onAbrirRecepcionHoy;
   } else if (estadoHoy === 'cerrada') {
     ctaLabel = 'Ver recepción de hoy';
     ctaSub = 'Ya se recibió hoy';
     ctaBg = 'bg-sage hover:brightness-95';
     ctaIcon = <CheckCircle2 className="w-7 h-7 text-white" />;
-    ctaOnClick = onAbrirRecepcionHoy;
   }
 
   return (
@@ -116,7 +112,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         {/* Accesos principales: fila horizontal en mobile, grilla pareja desde md */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
           <button
-            onClick={ctaOnClick}
+            onClick={onAbrirDiaDeHoy}
             disabled={cargandoRecepcionHoy}
             className={`btn-tactile md:col-span-1 text-white p-5 flex items-center md:flex-col md:items-start gap-4 md:gap-6 cursor-pointer group shadow-md md:justify-between disabled:opacity-60 disabled:cursor-wait ${ctaBg}`}
             style={{ minHeight: '104px' }}
@@ -190,11 +186,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           {!cargandoHistorial && recientes.length > 0 && (
             <div className="space-y-1.5">
               {recientes.map((r) => {
+                const pendiente = r.estado === 'pendiente';
                 const enCurso = r.estado === 'en_curso';
                 return (
                   <button
-                    key={String(r.idRecepcion)}
-                    onClick={() => onAbrirRecepcion(r)}
+                    key={r.fecha}
+                    onClick={() => onAbrirDia(r.fecha)}
                     className="btn-tactile card-flat w-full p-3 flex items-center gap-3 cursor-pointer text-left"
                   >
                     <span className="text-[10px] font-ticket uppercase text-ink-soft w-9 shrink-0">
@@ -202,14 +199,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     </span>
                     <span
                       className={`text-[10px] font-ticket font-bold uppercase tracking-wide px-1.5 py-0.5 shrink-0 ${
-                        enCurso ? 'bg-warn-tint text-warn' : 'bg-sage-tint text-sage-dark'
+                        pendiente
+                          ? 'bg-danger-tint text-danger'
+                          : enCurso
+                          ? 'bg-warn-tint text-warn'
+                          : 'bg-sage-tint text-sage-dark'
                       }`}
                     >
-                      {enCurso ? 'En curso' : 'Cerrada'}
+                      {pendiente ? 'Sin recepcionar' : enCurso ? 'En curso' : 'Cerrada'}
                     </span>
                     <span className="text-xs text-ink flex-1 truncate">
-                      {r.totalEscaneados} partida{r.totalEscaneados === 1 ? '' : 's'} escaneada
-                      {r.totalEscaneados === 1 ? '' : 's'}
+                      {pendiente
+                        ? `${r.totalRemitos} remito${r.totalRemitos === 1 ? '' : 's'}`
+                        : `${r.totalEscaneados} partida${r.totalEscaneados === 1 ? '' : 's'} escaneada${
+                            r.totalEscaneados === 1 ? '' : 's'
+                          }`}
                     </span>
                     <ChevronRight className="w-4 h-4 text-ink-soft/50 shrink-0" />
                   </button>
