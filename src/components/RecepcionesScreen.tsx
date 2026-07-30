@@ -1,12 +1,21 @@
 import React from 'react';
-import { ArrowLeft, ClipboardList, Clock, CheckCircle2, AlertTriangle, Info, ChevronRight } from 'lucide-react';
+import {
+  ArrowLeft,
+  ClipboardList,
+  Clock,
+  CheckCircle2,
+  AlertTriangle,
+  Info,
+  ChevronRight,
+  PackageX,
+} from 'lucide-react';
 import { RecepcionResumen } from '../types';
 
 interface RecepcionesScreenProps {
   recepciones: RecepcionResumen[];
   cargando: boolean;
   onVolver: () => void;
-  onAbrir: (recepcion: RecepcionResumen) => void;
+  onAbrir: (fecha: string) => void;
 }
 
 function formatFechaCorta(fechaIso: string): string {
@@ -49,9 +58,7 @@ export const RecepcionesScreen: React.FC<RecepcionesScreenProps> = ({
       </div>
 
       <div className="p-4 md:p-6 space-y-2">
-        {cargando && (
-          <div className="text-center text-sm text-ink-soft py-10">Cargando recepciones…</div>
-        )}
+        {cargando && <div className="text-center text-sm text-ink-soft py-10">Cargando recepciones…</div>}
 
         {!cargando && recepciones.length === 0 && (
           <div className="card-flat p-6 text-center">
@@ -62,11 +69,12 @@ export const RecepcionesScreen: React.FC<RecepcionesScreenProps> = ({
 
         {!cargando &&
           recepciones.map((r) => {
+            const pendiente = r.estado === 'pendiente';
             const enCurso = r.estado === 'en_curso';
             return (
               <button
-                key={String(r.idRecepcion)}
-                onClick={() => onAbrir(r)}
+                key={r.fecha}
+                onClick={() => onAbrir(r.fecha)}
                 className="btn-tactile card-flat w-full p-4 flex items-center gap-3 cursor-pointer text-left"
               >
                 <div className="w-12 h-12 shrink-0 rounded-full bg-paper-sunken flex flex-col items-center justify-center">
@@ -79,11 +87,21 @@ export const RecepcionesScreen: React.FC<RecepcionesScreenProps> = ({
                   <div className="flex items-center gap-2">
                     <span
                       className={`inline-flex items-center gap-1 text-[10px] font-ticket font-bold uppercase tracking-wide px-1.5 py-0.5 ${
-                        enCurso ? 'bg-warn-tint text-warn' : 'bg-sage-tint text-sage-dark'
+                        pendiente
+                          ? 'bg-danger-tint text-danger'
+                          : enCurso
+                          ? 'bg-warn-tint text-warn'
+                          : 'bg-sage-tint text-sage-dark'
                       }`}
                     >
-                      {enCurso ? <Clock className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />}
-                      {enCurso ? 'En curso' : 'Cerrada'}
+                      {pendiente ? (
+                        <PackageX className="w-3 h-3" />
+                      ) : enCurso ? (
+                        <Clock className="w-3 h-3" />
+                      ) : (
+                        <CheckCircle2 className="w-3 h-3" />
+                      )}
+                      {pendiente ? 'Sin recepcionar' : enCurso ? 'En curso' : 'Cerrada'}
                     </span>
                     {r.timestampInicio && (
                       <span className="text-[11px] font-ticket text-ink-soft/70">
@@ -93,10 +111,15 @@ export const RecepcionesScreen: React.FC<RecepcionesScreenProps> = ({
                     )}
                   </div>
                   <p className="text-sm font-semibold text-ink mt-1">
-                    {r.totalEscaneados} partida{r.totalEscaneados === 1 ? '' : 's'} escaneada
-                    {r.totalEscaneados === 1 ? '' : 's'}
+                    {pendiente
+                      ? `${r.totalRemitos} remito${r.totalRemitos === 1 ? '' : 's'} remitido${
+                          r.totalRemitos === 1 ? '' : 's'
+                        } sin recepcionar`
+                      : `${r.totalEscaneados} partida${r.totalEscaneados === 1 ? '' : 's'} escaneada${
+                          r.totalEscaneados === 1 ? '' : 's'
+                        }`}
                   </p>
-                  {(r.totalFaltantes > 0 || r.totalSinCobrar > 0) && (
+                  {!pendiente && (r.totalFaltantes > 0 || r.totalSinCobrar > 0) && (
                     <div className="flex items-center gap-3 mt-1">
                       {r.totalFaltantes > 0 && (
                         <span className="inline-flex items-center gap-1 text-[11px] font-ticket text-danger">
