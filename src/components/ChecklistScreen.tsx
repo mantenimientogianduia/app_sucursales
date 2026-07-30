@@ -86,7 +86,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
           <div>
             <button
               onClick={onVolver}
-              title="Volver a Inicio (la recepción queda guardada)"
+              title="Volver al día (la recepción queda guardada)"
               className="btn-tactile w-8 h-8 -ml-1 mb-2 rounded-full bg-black/15 hover:bg-black/25 flex items-center justify-center cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
