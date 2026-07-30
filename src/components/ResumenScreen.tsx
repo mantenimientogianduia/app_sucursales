@@ -1,13 +1,29 @@
 import React from 'react';
-import { CheckCircle2, AlertTriangle, Info, ArrowLeft, Download, FileCheck } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Info, ArrowLeft, Download, FileCheck, RotateCcw, Lock } from 'lucide-react';
 import { RecepcionGuardada } from '../types';
 
 interface ResumenScreenProps {
   recepcion: RecepcionGuardada;
   onVolverInicio: () => void;
+  // true si esta es una recepción en_curso abandonada de un día anterior:
+  // los totales son un cálculo provisorio (no persistido) de lo que quedó
+  // sin cerrar, no un comprobante final.
+  preliminar?: boolean;
+  onCerrarAhora?: () => void;
+  // true solo si esta recepción cerrada corresponde al día de hoy — es la
+  // única que se puede reabrir para seguir escaneando.
+  puedeReabrir?: boolean;
+  onReabrir?: () => void;
 }
 
-export const ResumenScreen: React.FC<ResumenScreenProps> = ({ recepcion, onVolverInicio }) => {
+export const ResumenScreen: React.FC<ResumenScreenProps> = ({
+  recepcion,
+  onVolverInicio,
+  preliminar = false,
+  onCerrarAhora,
+  puedeReabrir = false,
+  onReabrir,
+}) => {
   const faltantes = recepcion.reclamos.filter(r => r.tipo === 'faltante');
   const sinCobrar = recepcion.reclamos.filter(r => r.tipo === 'sin_cobrar');
 
@@ -52,15 +68,31 @@ Firmado digitalmente por el local.
   return (
     <div className="min-h-screen flex flex-col bg-paper text-ink pb-28 max-w-md md:max-w-3xl lg:max-w-5xl mx-auto">
       <div className="ticket-perforation bg-terracotta-deep text-paper-raised px-5 pt-8 pb-6 text-center">
-        <FileCheck className="w-8 h-8 text-terracotta mx-auto mb-1.5" />
+        {preliminar ? (
+          <AlertTriangle className="w-8 h-8 text-warn mx-auto mb-1.5" />
+        ) : (
+          <FileCheck className="w-8 h-8 text-terracotta mx-auto mb-1.5" />
+        )}
         <span className="block text-[10px] font-ticket uppercase tracking-[0.2em] text-paper-raised/60">
-          Comprobante de recepción
+          {preliminar ? 'Recepción sin cerrar' : 'Comprobante de recepción'}
         </span>
-        <h1 className="text-2xl font-display font-bold italic mt-1">Recepción finalizada</h1>
+        <h1 className="text-2xl font-display font-bold italic mt-1">
+          {preliminar ? 'Quedó abierta' : 'Recepción finalizada'}
+        </h1>
         <p className="text-xs font-ticket text-paper-raised/70 mt-1">
           {recepcion.id} · {recepcion.fecha} {recepcion.hora}hs
         </p>
       </div>
+
+      {preliminar && (
+        <div className="mx-4 md:mx-6 mt-4 p-3 bg-warn-tint border border-warn/40 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 text-warn shrink-0 mt-0.5" />
+          <p className="text-xs text-ink">
+            Esta recepción del {recepcion.fecha} nunca se cerró. Los totales de abajo son un cálculo
+            provisorio a partir de lo que se llegó a escanear ese día.
+          </p>
+        </div>
+      )}
 
       <div className="p-4 md:p-6 space-y-3">
         <div className="md:grid md:grid-cols-3 md:gap-3 md:space-y-0 space-y-3">
@@ -132,19 +164,44 @@ Firmado digitalmente por el local.
         </div>
         </div>
 
-        <button
-          onClick={handleDescargarComprobante}
-          className="btn-tactile w-full card-flat p-3.5 flex items-center justify-center gap-2 text-sm font-semibold text-ink cursor-pointer"
-        >
-          <Download className="w-4 h-4 text-terracotta" />
-          <span>Descargar comprobante (.txt)</span>
-        </button>
+        {!preliminar && (
+          <button
+            onClick={handleDescargarComprobante}
+            className="btn-tactile w-full card-flat p-3.5 flex items-center justify-center gap-2 text-sm font-semibold text-ink cursor-pointer"
+          >
+            <Download className="w-4 h-4 text-terracotta" />
+            <span>Descargar comprobante (.txt)</span>
+          </button>
+        )}
+
+        {puedeReabrir && onReabrir && (
+          <button
+            onClick={onReabrir}
+            className="btn-tactile w-full card-flat p-3.5 flex items-center justify-center gap-2 text-sm font-semibold text-warn border border-warn/40 cursor-pointer"
+          >
+            <RotateCcw className="w-4 h-4" />
+            <span>Reabrir para seguir escaneando</span>
+          </button>
+        )}
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-paper-raised border-t-2 border-ink/15 p-3 max-w-md md:max-w-3xl lg:max-w-5xl mx-auto shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-paper-raised border-t-2 border-ink/15 p-3 max-w-md md:max-w-3xl lg:max-w-5xl mx-auto space-y-2 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
+        {preliminar && onCerrarAhora && (
+          <button
+            onClick={onCerrarAhora}
+            className="btn-tactile w-full h-14 bg-warn hover:brightness-95 text-white font-bold text-base flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <Lock className="w-5 h-5" />
+            <span>Cerrar esta recepción ahora</span>
+          </button>
+        )}
         <button
           onClick={onVolverInicio}
-          className="btn-tactile w-full h-14 bg-ink hover:bg-terracotta-deep text-white font-bold text-base flex items-center justify-center gap-2 cursor-pointer"
+          className={`btn-tactile w-full h-14 font-bold text-base flex items-center justify-center gap-2 cursor-pointer ${
+            preliminar
+              ? 'bg-paper-sunken text-ink border border-ink/20'
+              : 'bg-ink hover:bg-terracotta-deep text-white'
+          }`}
         >
           <ArrowLeft className="w-5 h-5 text-terracotta" />
           <span>Volver al inicio</span>

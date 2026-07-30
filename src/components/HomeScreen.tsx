@@ -1,13 +1,26 @@
 import React from 'react';
-import { PackagePlus, PackageSearch, LayoutGrid, LogOut, ChevronRight, Clock, ClipboardList } from 'lucide-react';
+import {
+  PackagePlus,
+  PackageSearch,
+  LayoutGrid,
+  LogOut,
+  ChevronRight,
+  Clock,
+  CheckCircle2,
+  ClipboardList,
+} from 'lucide-react';
 import { LocalUsuario, RecepcionResumen } from '../types';
+import { RecepcionDetalle } from '../services/apiService';
 import { AppShell, AreaPrincipal } from './ui/AppShell';
 
 interface HomeScreenProps {
   local: LocalUsuario;
+  recepcionHoy: RecepcionDetalle | null;
+  cargandoRecepcionHoy: boolean;
   historial: RecepcionResumen[];
   cargandoHistorial: boolean;
   onIniciarRecepcion: () => void;
+  onAbrirRecepcionHoy: () => void;
   onAbrirRecepcion: (recepcion: RecepcionResumen) => void;
   onVerHistorialCompleto: () => void;
   onIrAStock: () => void;
@@ -30,9 +43,12 @@ function formatFechaCorta(fechaIso: string): string {
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   local,
+  recepcionHoy,
+  cargandoRecepcionHoy,
   historial,
   cargandoHistorial,
   onIniciarRecepcion,
+  onAbrirRecepcionHoy,
   onAbrirRecepcion,
   onVerHistorialCompleto,
   onIrAStock,
@@ -44,8 +60,34 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     if (area === 'exhibidora') onIrAExhibidora();
   };
 
-  const recepcionPendiente = historial.find((r) => r.estado === 'en_curso') || null;
   const recientes = historial.slice(0, 4);
+
+  // El estado de "hoy" (nada / en_curso / cerrada) lo resuelve el servidor
+  // via GET /api/recepciones/hoy — no se infiere revisando el historial de
+  // 7 días, porque eso podía enganchar una recepción en_curso abandonada de
+  // un día viejo y ofrecer "continuarla" por error.
+  const estadoHoy = recepcionHoy?.recepcion?.estado ?? null;
+  const totalEscaneadosHoy = recepcionHoy?.escaneados.length ?? 0;
+
+  let ctaLabel = 'Iniciar recepción de hoy';
+  let ctaSub = 'Lista esperada + escáner QR de fábrica';
+  let ctaBg = 'bg-terracotta hover:bg-terracotta-dark';
+  let ctaIcon = <PackagePlus className="w-7 h-7 text-white" />;
+  let ctaOnClick = onIniciarRecepcion;
+
+  if (estadoHoy === 'en_curso') {
+    ctaLabel = 'Continuar recepción';
+    ctaSub = `${totalEscaneadosHoy} partida${totalEscaneadosHoy === 1 ? '' : 's'} ya escaneada${totalEscaneadosHoy === 1 ? '' : 's'}`;
+    ctaBg = 'bg-warn hover:brightness-95';
+    ctaIcon = <Clock className="w-7 h-7 text-white" />;
+    ctaOnClick = onAbrirRecepcionHoy;
+  } else if (estadoHoy === 'cerrada') {
+    ctaLabel = 'Ver recepción de hoy';
+    ctaSub = 'Ya se recibió hoy';
+    ctaBg = 'bg-sage hover:brightness-95';
+    ctaIcon = <CheckCircle2 className="w-7 h-7 text-white" />;
+    ctaOnClick = onAbrirRecepcionHoy;
+  }
 
   return (
     <AppShell activa="inicio" onNavegar={handleNav}>
@@ -74,28 +116,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         {/* Accesos principales: fila horizontal en mobile, grilla pareja desde md */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
           <button
-            onClick={() => (recepcionPendiente ? onAbrirRecepcion(recepcionPendiente) : onIniciarRecepcion())}
-            className={`btn-tactile md:col-span-1 text-white p-5 flex items-center md:flex-col md:items-start gap-4 md:gap-6 cursor-pointer group shadow-md md:justify-between ${
-              recepcionPendiente ? 'bg-warn hover:brightness-95' : 'bg-terracotta hover:bg-terracotta-dark'
-            }`}
+            onClick={ctaOnClick}
+            disabled={cargandoRecepcionHoy}
+            className={`btn-tactile md:col-span-1 text-white p-5 flex items-center md:flex-col md:items-start gap-4 md:gap-6 cursor-pointer group shadow-md md:justify-between disabled:opacity-60 disabled:cursor-wait ${ctaBg}`}
             style={{ minHeight: '104px' }}
           >
             <div className="w-14 h-14 rounded-full bg-white/15 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-              {recepcionPendiente ? (
-                <Clock className="w-7 h-7 text-white" />
-              ) : (
-                <PackagePlus className="w-7 h-7 text-white" />
-              )}
+              {ctaIcon}
             </div>
             <div className="text-left min-w-0">
-              <span className="block text-lg font-display font-bold leading-tight">
-                {recepcionPendiente ? 'Continuar recepción' : 'Iniciar recepción de hoy'}
-              </span>
-              <span className="text-xs text-white/80 font-medium">
-                {recepcionPendiente
-                  ? `${recepcionPendiente.totalEscaneados} partidas ya escaneadas`
-                  : 'Lista esperada + escáner QR de fábrica'}
-              </span>
+              <span className="block text-lg font-display font-bold leading-tight">{ctaLabel}</span>
+              <span className="text-xs text-white/80 font-medium">{ctaSub}</span>
             </div>
             <ChevronRight className="w-5 h-5 ml-auto md:ml-0 shrink-0 opacity-70" />
           </button>

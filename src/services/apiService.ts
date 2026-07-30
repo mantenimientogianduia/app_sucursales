@@ -168,16 +168,109 @@ export function calcularTotales(esperados: ItemEsperado[], escaneados: ItemEscan
 }
 
 /**
- * Iniciar (o reanudar, si ya habia una en_curso hoy) una recepción: crea o
- * reutiliza la cabecera en el servidor y devuelve lo esperado hoy y lo que
- * ya se hubiera escaneado si se está reanudando.
+ * Arma un RecepcionGuardada (para ResumenScreen) a partir de una cabecera de
+ * recepción + lo esperado/escaneado/reclamos. Se usa tanto para una cerrada
+ * "de verdad" como para el resumen preliminar de una abandonada.
  */
-export async function iniciarRecepcion(): Promise<{ esperados: ItemEsperado[]; escaneados: ItemEscaneado[] }> {
-  const data = await apiFetch('/api/recepciones', { method: 'POST' });
-  idRecepcionActual = data.idRecepcion;
+export function construirRecepcionGuardada(
+  recepcion: RecepcionInfo,
+  esperados: ItemEsperado[],
+  escaneados: ItemEscaneado[],
+  reclamos: Reclamo[],
+  usuarioLocal: string
+): RecepcionGuardada {
+  const totales = calcularTotales(esperados, escaneados);
+  const marcaTiempo = recepcion.timestampFin || recepcion.timestampInicio;
+  const hora = marcaTiempo ? new Date(marcaTiempo).toTimeString().slice(0, 5) : '';
+
+  return {
+    id: `REC-${recepcion.idRecepcion}`,
+    fecha: recepcion.fecha,
+    hora,
+    totalesperados: totales.totalEsperados,
+    totalRecibidosOk: totales.totalRecibidosOk,
+    totalFaltantes: totales.totalFaltantes,
+    totalSinCobrar: totales.totalSinCobrar,
+    escaneados,
+    reclamos,
+    usuarioLocal,
+  };
+}
+
+// Info de cabecera de una recepción puntual. "editable" viene calculado del
+// servidor: true solo si esta en_curso Y es la de hoy — es la unica que
+// admite seguir escaneando. Una en_curso de un dia anterior (abandonada) o
+// una cerrada son de solo lectura.
+export type RecepcionInfo = {
+  idRecepcion: number | string;
+  estado: 'en_curso' | 'cerrada';
+  fecha: string;
+  editable: boolean;
+  timestampInicio: string | null;
+  timestampFin: string | null;
+};
+
+export type RecepcionDetalle = {
+  recepcion: RecepcionInfo | null;
+  esperados: ItemEsperado[];
+  escaneados: ItemEscaneado[];
+  reclamos: Reclamo[];
+};
+
+function mapReclamos(data: any): Reclamo[] {
+  return (data.reclamos || []).map((r: any) => ({
+    tipo: r.tipo,
+    idProd: r.idProd,
+    nombreProducto: r.nombreProducto || r.idProd,
+    partida: r.partida ?? null,
+    detalle: r.detalle,
+  }));
+}
+
+function mapRecepcionDetalle(data: any): RecepcionDetalle {
   const esperados = (data.esperado || []).map(mapEsperadoRow);
   const escaneados = (data.escaneado || []).map((row: any) => mapEscaneadoRow(row, esperados));
-  return { esperados, escaneados };
+  const reclamos = mapReclamos(data);
+
+  const recepcion: RecepcionInfo | null = data.recepcion
+    ? {
+        idRecepcion: data.recepcion.idRecepcion,
+        estado: data.recepcion.estado,
+        fecha: data.recepcion.fecha,
+        editable: Boolean(data.recepcion.editable),
+        timestampInicio: data.recepcion.timestampInicio ?? null,
+        timestampFin: data.recepcion.timestampFin ?? null,
+      }
+    : null;
+
+  // Solo una recepcion editable (en_curso Y de hoy) puede ser el destino de
+  // los proximos escaneos/carga manual/finalizar. Una abandonada de un dia
+  // anterior nunca se marca como "actual" aunque siga en_curso — el
+  // servidor la rechazaria igual, pero asi ni se ofrece la UI de escaneo.
+  if (recepcion?.editable) {
+    idRecepcionActual = recepcion.idRecepcion;
+  }
+
+  return { recepcion, esperados, escaneados, reclamos };
+}
+
+/**
+ * Iniciar (o reanudar, si ya habia una para hoy) una recepción: crea o
+ * reutiliza la cabecera en el servidor de forma idempotente y devuelve lo
+ * esperado hoy y lo que ya se hubiera escaneado si se está reanudando.
+ */
+export async function iniciarRecepcion(): Promise<RecepcionDetalle> {
+  const data = await apiFetch('/api/recepciones', { method: 'POST' });
+  return mapRecepcionDetalle(data);
+}
+
+/**
+ * Fuente de verdad de "que hay para hoy": ninguna recepción todavía,
+ * una en_curso, o una ya cerrada. No crea nada — es de solo lectura.
+ */
+export async function getRecepcionHoy(): Promise<RecepcionDetalle> {
+  const data = await apiFetch('/api/recepciones/hoy');
+  return mapRecepcionDetalle(data);
 }
 
 /**
@@ -200,34 +293,22 @@ export async function getHistorialRecepciones(dias: number = 7): Promise<Recepci
 }
 
 /**
- * Detalle completo de una recepción puntual: lo esperado, lo escaneado y
- * (si ya está cerrada) los reclamos generados. Si la recepción sigue
- * en_curso, la marca como la recepción activa para poder seguir
- * escaneando/finalizarla.
+ * Detalle completo de una recepción puntual: lo esperado, lo escaneado, y
+ * los reclamos (persistidos si esta cerrada, calculados en vivo sin
+ * persistir si es una en_curso abandonada de un dia anterior).
  */
-export async function getRecepcionDetalle(idRecepcion: number | string): Promise<{
-  estado: 'en_curso' | 'cerrada';
-  esperados: ItemEsperado[];
-  escaneados: ItemEscaneado[];
-  reclamos: Reclamo[];
-}> {
+export async function getRecepcionDetalle(idRecepcion: number | string): Promise<RecepcionDetalle> {
   const data = await apiFetch(`/api/recepciones/${idRecepcion}`);
-  const esperados = (data.esperado || []).map(mapEsperadoRow);
-  const escaneados = (data.escaneado || []).map((row: any) => mapEscaneadoRow(row, esperados));
-  const reclamos: Reclamo[] = (data.reclamos || []).map((r: any) => ({
-    tipo: r.tipo,
-    idProd: r.idProd,
-    nombreProducto: r.nombreProducto || r.idProd,
-    partida: r.partida ?? null,
-    detalle: r.detalle,
-  }));
+  return mapRecepcionDetalle(data);
+}
 
-  const estado = data.recepcion.estado as 'en_curso' | 'cerrada';
-  if (estado === 'en_curso') {
-    idRecepcionActual = data.recepcion.idRecepcion;
-  }
-
-  return { estado, esperados, escaneados, reclamos };
+/**
+ * Reabrir una recepción cerrada para seguir escaneando (por ejemplo si se
+ * cerro por error). El servidor solo lo permite si es la recepción de hoy.
+ */
+export async function reabrirRecepcion(idRecepcion: number | string): Promise<RecepcionDetalle> {
+  const data = await apiFetch(`/api/recepciones/${idRecepcion}/reabrir`, { method: 'POST' });
+  return mapRecepcionDetalle(data);
 }
 
 function mapEscaneoResponse(data: any): ItemEscaneado {
@@ -279,11 +360,25 @@ export async function registrarCargaManual(dataManual: {
 }
 
 /**
- * Finalizar la recepción en curso. El servidor recalcula los reclamos desde
- * cero a partir de lo realmente persistido (no de lo que mande el cliente),
- * y cierra la recepción. Los totales del resumen se calculan acá a partir de
- * lo que el cliente ya sabe (cada escaneo fue confirmado por el servidor al
- * agregarse), para no duplicar la lógica de matching del backend.
+ * Cierra una recepción puntual (identificada por id, no por la "actual" del
+ * modulo): el servidor recalcula los reclamos desde cero a partir de lo
+ * realmente persistido y la marca cerrada. Sirve tanto para el cierre
+ * normal desde el checklist como para "cerrar ahora" una recepción vieja
+ * que quedó abandonada (el backend lo permite sin restricción de fecha).
+ */
+export async function finalizarRecepcion(idRecepcion: number | string): Promise<Reclamo[]> {
+  const data = await apiFetch(`/api/recepciones/${idRecepcion}/finalizar`, { method: 'POST' });
+  if (idRecepcionActual === idRecepcion) {
+    idRecepcionActual = null;
+  }
+  return mapReclamos(data);
+}
+
+/**
+ * Finalizar la recepción en curso (la que se está escaneando activamente).
+ * Los totales del resumen se calculan acá a partir de lo que el cliente ya
+ * sabe (cada escaneo fue confirmado por el servidor al agregarse), para no
+ * duplicar la lógica de matching del backend.
  */
 export async function enviarRecepcionFinalizada(
   esperados: ItemEsperado[],
@@ -295,18 +390,7 @@ export async function enviarRecepcionFinalizada(
   }
 
   const idRecepcionCerrada = idRecepcionActual;
-  const data = await apiFetch(`/api/recepciones/${idRecepcionCerrada}/finalizar`, {
-    method: 'POST',
-  });
-  idRecepcionActual = null;
-
-  const reclamos: Reclamo[] = (data.reclamos || []).map((r: any) => ({
-    tipo: r.tipo,
-    idProd: r.idProd,
-    nombreProducto: r.nombreProducto || r.idProd,
-    partida: r.partida ?? null,
-    detalle: r.detalle,
-  }));
+  const reclamos = await finalizarRecepcion(idRecepcionCerrada);
 
   const { totalEsperados, totalRecibidosOk, totalFaltantes, totalSinCobrar } = calcularTotales(
     esperados,

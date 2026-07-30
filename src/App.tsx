@@ -15,8 +15,12 @@ import {
   enviarRecepcionFinalizada,
   getCatalogoProductos,
   getHistorialRecepciones,
+  getRecepcionHoy,
   getRecepcionDetalle,
-  calcularTotales
+  reabrirRecepcion,
+  finalizarRecepcion,
+  construirRecepcionGuardada,
+  RecepcionDetalle
 } from './services/apiService';
 import { LoginScreen } from './components/LoginScreen';
 import { HomeScreen } from './components/HomeScreen';
@@ -34,10 +38,20 @@ export default function App() {
   const [pantalla, setPantalla] = useState<PantallaNavegacion>('login');
   const [local, setLocal] = useState<LocalUsuario | null>(null);
 
-  // Datos de la recepción en curso
+  // Datos de la recepción en curso (checklist)
   const [esperados, setEsperados] = useState<ItemEsperado[]>([]);
   const [escaneados, setEscaneados] = useState<ItemEscaneado[]>([]);
+
+  // Datos de la pantalla de resumen (final, preliminar, o "de hoy")
   const [recepcionFinal, setRecepcionFinal] = useState<RecepcionGuardada | null>(null);
+  const [idRecepcionResumen, setIdRecepcionResumen] = useState<number | string | null>(null);
+  const [resumenPreliminar, setResumenPreliminar] = useState(false);
+  const [resumenPuedeReabrir, setResumenPuedeReabrir] = useState(false);
+
+  // Estado autoritativo de "hoy": nada, en_curso, o cerrada. Lo resuelve el
+  // servidor (GET /api/recepciones/hoy) — nunca se infiere del historial.
+  const [recepcionHoy, setRecepcionHoy] = useState<RecepcionDetalle | null>(null);
+  const [cargandoRecepcionHoy, setCargandoRecepcionHoy] = useState(false);
 
   // Historial de recepciones (últimos 7 días) para Inicio y el listado completo
   const [historial, setHistorial] = useState<RecepcionResumen[]>([]);
@@ -80,22 +94,30 @@ export default function App() {
     return () => window.removeEventListener('sesion-local-expirada', handleSesionExpirada);
   }, []);
 
-  // Historial de recepciones: se recarga cada vez que se entra a Inicio o al
-  // listado completo, para reflejar cambios hechos desde otra pestaña/sesión
-  // (por ejemplo, otra persona finalizando la recepción en curso).
+  // Estado de "hoy" + historial de 7 días: se recargan juntos cada vez que
+  // se entra a Inicio o al listado completo, para reflejar cambios hechos
+  // desde otra pestaña/sesión.
   useEffect(() => {
     if (!local || (pantalla !== 'inicio' && pantalla !== 'recepciones')) return;
     let active = true;
     setCargandoHistorial(true);
-    getHistorialRecepciones()
-      .then((data) => {
-        if (active) setHistorial(data);
+    setCargandoRecepcionHoy(true);
+    Promise.all([getHistorialRecepciones(), getRecepcionHoy()])
+      .then(([hist, hoy]) => {
+        if (!active) return;
+        setHistorial(hist);
+        setRecepcionHoy(hoy);
       })
       .catch(() => {
-        if (active) setHistorial([]);
+        if (!active) return;
+        setHistorial([]);
+        setRecepcionHoy(null);
       })
       .finally(() => {
-        if (active) setCargandoHistorial(false);
+        if (active) {
+          setCargandoHistorial(false);
+          setCargandoRecepcionHoy(false);
+        }
       });
     return () => {
       active = false;
@@ -114,68 +136,98 @@ export default function App() {
     setPantalla('login');
   };
 
-  // Iniciar una nueva recepción (o reanudar la de hoy si ya había una en
-  // curso): la crea/reutiliza en el servidor y trae lo esperado + lo ya
-  // escaneado.
+  const cargarCatalogoProductos = () => {
+    setCargandoProductos(true);
+    getCatalogoProductos()
+      .then(setProductos)
+      .catch(() => setProductos([]))
+      .finally(() => setCargandoProductos(false));
+  };
+
+  // Arma la pantalla de Resumen (final, o preliminar si es una recepción
+  // en_curso abandonada de un día anterior) a partir de un detalle ya
+  // resuelto por el servidor.
+  const mostrarResumenDesdeDetalle = (detalle: RecepcionDetalle) => {
+    if (!local || !detalle.recepcion) return;
+    const { recepcion, esperados: esp, escaneados: esc, reclamos } = detalle;
+
+    const abandonada = recepcion.estado === 'en_curso' && !recepcion.editable;
+    const puedeReabrir = recepcion.estado === 'cerrada' && recepcion.fecha === recepcionHoy?.recepcion?.fecha;
+
+    setIdRecepcionResumen(recepcion.idRecepcion);
+    setResumenPreliminar(abandonada);
+    setResumenPuedeReabrir(puedeReabrir);
+    setRecepcionFinal(construirRecepcionGuardada(recepcion, esp, esc, reclamos, local.nombreLocal));
+    setPantalla('resumen');
+  };
+
+  // Punto de entrada común: si la recepción es editable (en_curso y de
+  // hoy), entra al checklist para seguir escaneando; si no, muestra el
+  // resumen (final o preliminar según corresponda).
+  const abrirDesdeDetalle = (detalle: RecepcionDetalle) => {
+    if (!detalle.recepcion) return;
+    setRecepcionFinal(null);
+
+    if (detalle.recepcion.editable) {
+      setEsperados(detalle.esperados);
+      setEscaneados(detalle.escaneados);
+      setPantalla('checklist');
+      cargarCatalogoProductos();
+      return;
+    }
+
+    mostrarResumenDesdeDetalle(detalle);
+  };
+
+  // Iniciar (o recuperar, de forma idempotente) la recepción de hoy.
   const handleIniciarRecepcion = async () => {
     try {
-      const { esperados: dataEsperados, escaneados: dataEscaneados } = await iniciarRecepcion();
-      setEsperados(dataEsperados);
-      setEscaneados(dataEscaneados);
-      setRecepcionFinal(null);
-      setPantalla('checklist');
-
-      setCargandoProductos(true);
-      getCatalogoProductos()
-        .then(setProductos)
-        .catch(() => setProductos([]))
-        .finally(() => setCargandoProductos(false));
+      const detalle = await iniciarRecepcion();
+      abrirDesdeDetalle(detalle);
     } catch (err: any) {
       alert(err.message || 'No se pudo iniciar la recepción.');
     }
   };
 
-  // Abrir una recepción puntual desde el historial: si sigue en_curso, entra
-  // al checklist para seguir escaneando; si ya está cerrada, arma el resumen
-  // guardado y lo muestra tal como si se acabara de finalizar.
+  // CTA de Inicio cuando ya hay algo para hoy: usa el detalle que ya se
+  // trajo con GET /api/recepciones/hoy, sin otra ida y vuelta al servidor.
+  const handleAbrirRecepcionHoy = () => {
+    if (recepcionHoy) abrirDesdeDetalle(recepcionHoy);
+  };
+
+  // Abrir una recepción puntual desde el historial (puede ser de hoy o de
+  // un día anterior, en_curso o cerrada).
   const handleAbrirRecepcion = async (resumen: RecepcionResumen) => {
     try {
       const detalle = await getRecepcionDetalle(resumen.idRecepcion);
-      setRecepcionFinal(null);
-
-      if (detalle.estado === 'en_curso') {
-        setEsperados(detalle.esperados);
-        setEscaneados(detalle.escaneados);
-        setPantalla('checklist');
-
-        setCargandoProductos(true);
-        getCatalogoProductos()
-          .then(setProductos)
-          .catch(() => setProductos([]))
-          .finally(() => setCargandoProductos(false));
-        return;
-      }
-
-      const totales = calcularTotales(detalle.esperados, detalle.escaneados);
-      const hora = resumen.timestampFin
-        ? new Date(resumen.timestampFin).toTimeString().slice(0, 5)
-        : new Date(resumen.timestampInicio).toTimeString().slice(0, 5);
-
-      setRecepcionFinal({
-        id: `REC-${resumen.idRecepcion}`,
-        fecha: resumen.fecha,
-        hora,
-        totalesperados: totales.totalEsperados,
-        totalRecibidosOk: totales.totalRecibidosOk,
-        totalFaltantes: totales.totalFaltantes,
-        totalSinCobrar: totales.totalSinCobrar,
-        escaneados: detalle.escaneados,
-        reclamos: detalle.reclamos,
-        usuarioLocal: local?.nombreLocal || '',
-      });
-      setPantalla('resumen');
+      abrirDesdeDetalle(detalle);
     } catch (err: any) {
       alert(err.message || 'No se pudo abrir la recepción.');
+    }
+  };
+
+  // Reabrir la recepción de hoy (ya cerrada) para seguir escaneando.
+  const handleReabrir = async () => {
+    if (idRecepcionResumen === null) return;
+    try {
+      const detalle = await reabrirRecepcion(idRecepcionResumen);
+      abrirDesdeDetalle(detalle);
+    } catch (err: any) {
+      alert(err.message || 'No se pudo reabrir la recepción.');
+    }
+  };
+
+  // Cerrar ahora una recepción abandonada de un día anterior: la finaliza
+  // (persistiendo reclamos de verdad) y refresca el resumen a la versión
+  // final.
+  const handleCerrarAhora = async () => {
+    if (idRecepcionResumen === null) return;
+    try {
+      await finalizarRecepcion(idRecepcionResumen);
+      const detalleActualizado = await getRecepcionDetalle(idRecepcionResumen);
+      mostrarResumenDesdeDetalle(detalleActualizado);
+    } catch (err: any) {
+      alert(err.message || 'No se pudo cerrar la recepción.');
     }
   };
 
@@ -225,12 +277,16 @@ export default function App() {
     }
   };
 
-  // Finalizar Recepción
+  // Finalizar la recepción que se está escaneando activamente. Al terminar
+  // queda como la recepción cerrada de hoy, así que siempre admite reabrir.
   const handleFinalizarRecepcion = async () => {
     if (!local) return;
     try {
       const res = await enviarRecepcionFinalizada(esperados, escaneados, local.nombreLocal);
       if (res.ok) {
+        setIdRecepcionResumen(res.recepcion.id.replace('REC-', ''));
+        setResumenPreliminar(false);
+        setResumenPuedeReabrir(true);
         setRecepcionFinal(res.recepcion);
         setPantalla('resumen');
       }
@@ -250,9 +306,12 @@ export default function App() {
       {pantalla === 'inicio' && local && (
         <HomeScreen
           local={local}
+          recepcionHoy={recepcionHoy}
+          cargandoRecepcionHoy={cargandoRecepcionHoy}
           historial={historial}
           cargandoHistorial={cargandoHistorial}
           onIniciarRecepcion={handleIniciarRecepcion}
+          onAbrirRecepcionHoy={handleAbrirRecepcionHoy}
           onAbrirRecepcion={handleAbrirRecepcion}
           onVerHistorialCompleto={() => setPantalla('recepciones')}
           onIrAStock={() => setPantalla('stock')}
@@ -299,10 +358,14 @@ export default function App() {
         />
       )}
 
-      {/* 4. Pantalla Resumen Final */}
+      {/* 4. Pantalla Resumen (final, preliminar, o de hoy) */}
       {pantalla === 'resumen' && recepcionFinal && (
         <ResumenScreen
           recepcion={recepcionFinal}
+          preliminar={resumenPreliminar}
+          onCerrarAhora={handleCerrarAhora}
+          puedeReabrir={resumenPuedeReabrir}
+          onReabrir={handleReabrir}
           onVolverInicio={() => setPantalla('inicio')}
         />
       )}
@@ -326,4 +389,3 @@ export default function App() {
     </div>
   );
 }
-
