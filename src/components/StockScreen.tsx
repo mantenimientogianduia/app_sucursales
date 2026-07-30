@@ -127,6 +127,23 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
     });
   }, [partidasDeFamilia, busqueda, filtroProducto]);
 
+  // Agrupa los resultados (ya vienen ordenados por producto desde el
+  // servidor) para mostrar el nombre del producto una sola vez por grupo
+  // en vez de repetirlo en cada fila — asi el cambio de sabor se nota de
+  // un vistazo, en vez de depender de un espacio sutil entre filas.
+  const gruposResultados = useMemo(() => {
+    const grupos: Array<{ idProd: string; nombreProducto: string; familia: string | null; partidas: PartidaConStock[] }> = [];
+    for (const p of resultados) {
+      const ultimo = grupos[grupos.length - 1];
+      if (ultimo && ultimo.idProd === p.idProd) {
+        ultimo.partidas.push(p);
+      } else {
+        grupos.push({ idProd: p.idProd, nombreProducto: p.nombreProducto, familia: p.familia, partidas: [p] });
+      }
+    }
+    return grupos;
+  }, [resultados]);
+
   const elegirFamilia = (valor: string) => {
     setFiltroFamilia(valor);
     setFiltroProducto(null);
@@ -274,42 +291,44 @@ export const StockScreen: React.FC<StockScreenProps> = ({ onVolver, onIrAExhibid
               }
             />
           ) : (
-            <div>
-              {resultados.map((lote, index) => {
-                const nuevoGrupo = index > 0 && resultados[index - 1].idProd !== lote.idProd;
-                return (
-                <div
-                  key={lote.idLote}
-                  className={`list-row py-1.5 flex items-center justify-between gap-3 ${nuevoGrupo ? 'mt-3' : ''}`}
-                >
-                  <div className="min-w-0 flex items-center gap-2">
-                    {lote.familia && (
-                      <span className="shrink-0 text-[9px] font-ticket font-semibold uppercase tracking-wider text-ink-soft bg-paper-sunken px-1.5 py-0.5">
-                        {lote.familia}
+            <div className="space-y-3">
+              {gruposResultados.map((grupo) => (
+                <div key={grupo.idProd} className="card-flat">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-paper-sunken border-b-2 border-ink/15">
+                    {grupo.familia && (
+                      <span className="shrink-0 text-[9px] font-ticket font-semibold uppercase tracking-wider text-ink-soft bg-paper-raised px-1.5 py-0.5">
+                        {grupo.familia}
                       </span>
                     )}
-                    <h4 className="text-sm font-semibold text-ink truncate">{lote.nombreProducto}</h4>
-                    <span className="shrink-0 text-[11px] font-ticket text-ink-soft">
-                      fab {formatFecha(lote.fechaFabricacion || lote.timestampRecep)}
+                    <h4 className="text-sm font-display font-bold text-ink truncate">{grupo.nombreProducto}</h4>
+                    <span className="shrink-0 ml-auto text-[10px] font-ticket text-ink-soft/60">
+                      {grupo.partidas.length} partida{grupo.partidas.length === 1 ? '' : 's'}
                     </span>
                   </div>
 
-                  <div className="shrink-0 flex items-center gap-2">
-                    <span className="text-xs font-bold text-ink">{formatCantidad(lote.cantidad, lote.unidadMedida)}</span>
-                    <button
-                      onClick={() => solicitarExhibir(lote)}
-                      disabled={exhibiendoId === lote.idLote}
-                      title={lote.esFifo ? 'Respeta el orden FIFO' : 'Hay una partida más vieja sin exhibir'}
-                      className={`btn-tactile h-9 px-3 text-white font-semibold text-xs cursor-pointer disabled:opacity-50 ${
-                        lote.esFifo ? 'bg-ok hover:bg-ok/90' : 'bg-warn hover:bg-warn/90'
-                      }`}
-                    >
-                      {exhibiendoId === lote.idLote ? '...' : 'Exhibir'}
-                    </button>
-                  </div>
+                  {grupo.partidas.map((lote) => (
+                    <div key={lote.idLote} className="list-row py-1.5 px-3 flex items-center justify-between gap-3">
+                      <span className="text-[11px] font-ticket text-ink-soft">
+                        fab {formatFecha(lote.fechaFabricacion || lote.timestampRecep)}
+                      </span>
+
+                      <div className="shrink-0 flex items-center gap-2">
+                        <span className="text-xs font-bold text-ink">{formatCantidad(lote.cantidad, lote.unidadMedida)}</span>
+                        <button
+                          onClick={() => solicitarExhibir(lote)}
+                          disabled={exhibiendoId === lote.idLote}
+                          title={lote.esFifo ? 'Respeta el orden FIFO' : 'Hay una partida más vieja sin exhibir'}
+                          className={`btn-tactile h-9 px-3 text-white font-semibold text-xs cursor-pointer disabled:opacity-50 ${
+                            lote.esFifo ? 'bg-ok hover:bg-ok/90' : 'bg-warn hover:bg-warn/90'
+                          }`}
+                        >
+                          {exhibiendoId === lote.idLote ? '...' : 'Exhibir'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                );
-              })}
+              ))}
             </div>
           )}
         </div>
