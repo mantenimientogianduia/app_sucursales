@@ -5,6 +5,7 @@ import {
   LocalUsuario,
   RecepcionGuardada,
   RecepcionResumen,
+  VentaDia,
   PartidaConStock,
   ExhibidoBacha,
   ExhibidoResto,
@@ -198,9 +199,9 @@ export function construirRecepcionGuardada(
 }
 
 // Info de cabecera de una recepción puntual. "editable" viene calculado del
-// servidor: true solo si esta en_curso Y es la de hoy — es la unica que
-// admite seguir escaneando. Una en_curso de un dia anterior (abandonada) o
-// una cerrada son de solo lectura.
+// servidor: true solo si esta en_curso Y dentro de la ventana reciente (7
+// dias) — es la unica que admite seguir escaneando. Una en_curso mas vieja
+// (abandonada) o una cerrada son de solo lectura.
 export type RecepcionInfo = {
   idRecepcion: number | string;
   estado: 'en_curso' | 'cerrada';
@@ -210,7 +211,9 @@ export type RecepcionInfo = {
   timestampFin: string | null;
 };
 
-export type RecepcionDetalle = {
+export type RecepcionDiaDetalle = {
+  fecha: string;
+  ventas: VentaDia[];
   recepcion: RecepcionInfo | null;
   esperados: ItemEsperado[];
   escaneados: ItemEscaneado[];
@@ -227,10 +230,27 @@ function mapReclamos(data: any): Reclamo[] {
   }));
 }
 
-function mapRecepcionDetalle(data: any): RecepcionDetalle {
+function mapVentaDia(v: any): VentaDia {
+  return {
+    idVenta: v.idVenta,
+    numeroRemito: v.numeroRemito ?? null,
+    monto: Number(v.monto) || 0,
+    estado: v.estado,
+    detalles: (v.detalles || []).map((d: any) => ({
+      idProd: d.idProd,
+      nombreProducto: d.nombreProducto || d.idProd,
+      cantidad: d.cantidad,
+      partida: d.partida ?? null,
+      venc: d.venc ?? null,
+    })),
+  };
+}
+
+function mapRecepcionDiaDetalle(data: any): RecepcionDiaDetalle {
   const esperados = (data.esperado || []).map(mapEsperadoRow);
   const escaneados = (data.escaneado || []).map((row: any) => mapEscaneadoRow(row, esperados));
   const reclamos = mapReclamos(data);
+  const ventas = (data.ventas || []).map(mapVentaDia);
 
   const recepcion: RecepcionInfo | null = data.recepcion
     ? {
@@ -243,34 +263,47 @@ function mapRecepcionDetalle(data: any): RecepcionDetalle {
       }
     : null;
 
-  // Solo una recepcion editable (en_curso Y de hoy) puede ser el destino de
-  // los proximos escaneos/carga manual/finalizar. Una abandonada de un dia
-  // anterior nunca se marca como "actual" aunque siga en_curso — el
-  // servidor la rechazaria igual, pero asi ni se ofrece la UI de escaneo.
+  // Solo una recepcion editable puede ser el destino de los proximos
+  // escaneos/carga manual/finalizar. Una abandonada nunca se marca como
+  // "actual" aunque siga en_curso — el servidor la rechazaria igual, pero
+  // asi ni se ofrece la UI de escaneo.
   if (recepcion?.editable) {
     idRecepcionActual = recepcion.idRecepcion;
   }
 
-  return { recepcion, esperados, escaneados, reclamos };
+  return { fecha: data.fecha, ventas, recepcion, esperados, escaneados, reclamos };
 }
 
 /**
- * Iniciar (o reanudar, si ya habia una para hoy) una recepción: crea o
- * reutiliza la cabecera en el servidor de forma idempotente y devuelve lo
- * esperado hoy y lo que ya se hubiera escaneado si se está reanudando.
+ * Iniciar (o reanudar, si ya habia una para esa fecha) una recepción: crea o
+ * reutiliza la cabecera en el servidor de forma idempotente. `fecha` es
+ * opcional (default hoy) para poder iniciar la recepción de un día pasado
+ * dentro de la ventana reciente.
  */
-export async function iniciarRecepcion(): Promise<RecepcionDetalle> {
-  const data = await apiFetch('/api/recepciones', { method: 'POST' });
-  return mapRecepcionDetalle(data);
+export async function iniciarRecepcion(fecha?: string): Promise<RecepcionDiaDetalle> {
+  const data = await apiFetch('/api/recepciones', {
+    method: 'POST',
+    body: JSON.stringify(fecha ? { fecha } : {}),
+  });
+  return mapRecepcionDiaDetalle(data);
 }
 
 /**
- * Fuente de verdad de "que hay para hoy": ninguna recepción todavía,
- * una en_curso, o una ya cerrada. No crea nada — es de solo lectura.
+ * Fuente de verdad de "que hay para hoy": ninguna recepción todavía, una
+ * en_curso, o una ya cerrada. No crea nada — es de solo lectura.
  */
-export async function getRecepcionHoy(): Promise<RecepcionDetalle> {
+export async function getRecepcionHoy(): Promise<RecepcionDiaDetalle> {
   const data = await apiFetch('/api/recepciones/hoy');
-  return mapRecepcionDetalle(data);
+  return mapRecepcionDiaDetalle(data);
+}
+
+/**
+ * Vista completa de un día puntual: las ventas remitidas ese día (agrupadas
+ * por remito) + el estado de la recepción (o null si no se inició ninguna).
+ */
+export async function getRecepcionDia(fecha: string): Promise<RecepcionDiaDetalle> {
+  const data = await apiFetch(`/api/recepciones/dia/${fecha}`);
+  return mapRecepcionDiaDetalle(data);
 }
 
 /**
@@ -293,22 +326,12 @@ export async function getHistorialRecepciones(dias: number = 7): Promise<Recepci
 }
 
 /**
- * Detalle completo de una recepción puntual: lo esperado, lo escaneado, y
- * los reclamos (persistidos si esta cerrada, calculados en vivo sin
- * persistir si es una en_curso abandonada de un dia anterior).
- */
-export async function getRecepcionDetalle(idRecepcion: number | string): Promise<RecepcionDetalle> {
-  const data = await apiFetch(`/api/recepciones/${idRecepcion}`);
-  return mapRecepcionDetalle(data);
-}
-
-/**
  * Reabrir una recepción cerrada para seguir escaneando (por ejemplo si se
- * cerro por error). El servidor solo lo permite si es la recepción de hoy.
+ * cerró por error). El servidor solo lo permite dentro de la ventana reciente.
  */
-export async function reabrirRecepcion(idRecepcion: number | string): Promise<RecepcionDetalle> {
+export async function reabrirRecepcion(idRecepcion: number | string): Promise<RecepcionDiaDetalle> {
   const data = await apiFetch(`/api/recepciones/${idRecepcion}/reabrir`, { method: 'POST' });
-  return mapRecepcionDetalle(data);
+  return mapRecepcionDiaDetalle(data);
 }
 
 function mapEscaneoResponse(data: any): ItemEscaneado {
