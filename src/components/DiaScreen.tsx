@@ -166,6 +166,7 @@ function TotalesRecepcion({ recepcion }: { recepcion: RecepcionGuardada }) {
 export const DiaScreen: React.FC<DiaScreenProps> = ({ fecha, nombreLocal, onVolver, onIrAChecklist }) => {
   const [detalle, setDetalle] = useState<RecepcionDiaDetalle | null>(null);
   const [cargando, setCargando] = useState(true);
+  const [procesando, setProcesando] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -186,11 +187,14 @@ export const DiaScreen: React.FC<DiaScreenProps> = ({ fecha, nombreLocal, onVolv
   }, [fecha]);
 
   const handleIniciar = async () => {
+    setProcesando(true);
     try {
       const d = await iniciarRecepcion(fecha);
       onIrAChecklist(d.esperados, d.escaneados);
     } catch (err: any) {
       alert(err.message || 'No se pudo iniciar la recepción.');
+    } finally {
+      setProcesando(false);
     }
   };
 
@@ -200,21 +204,27 @@ export const DiaScreen: React.FC<DiaScreenProps> = ({ fecha, nombreLocal, onVolv
 
   const handleReabrir = async () => {
     if (!detalle?.recepcion) return;
+    setProcesando(true);
     try {
       const d = await reabrirRecepcion(detalle.recepcion.idRecepcion);
       onIrAChecklist(d.esperados, d.escaneados);
     } catch (err: any) {
       alert(err.message || 'No se pudo reabrir la recepción.');
+    } finally {
+      setProcesando(false);
     }
   };
 
   const handleCerrarAhora = async () => {
     if (!detalle?.recepcion) return;
+    setProcesando(true);
     try {
       await finalizarRecepcion(detalle.recepcion.idRecepcion);
       setDetalle(await getRecepcionDia(fecha));
     } catch (err: any) {
       alert(err.message || 'No se pudo cerrar la recepción.');
+    } finally {
+      setProcesando(false);
     }
   };
 
@@ -256,6 +266,7 @@ export const DiaScreen: React.FC<DiaScreenProps> = ({ fecha, nombreLocal, onVolv
                 <p className="text-sm text-ink-soft mb-4">Todavía no se inició la recepción de este día.</p>
                 <button
                   onClick={handleIniciar}
+                  disabled={procesando}
                   className="btn-tactile w-full h-12 bg-terracotta hover:bg-terracotta-dark text-white font-bold text-sm flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <PackagePlus className="w-4 h-4" />
@@ -294,6 +305,7 @@ export const DiaScreen: React.FC<DiaScreenProps> = ({ fecha, nombreLocal, onVolv
                 <TotalesRecepcion recepcion={guardada} />
                 <button
                   onClick={handleCerrarAhora}
+                  disabled={procesando}
                   className="btn-tactile w-full h-12 bg-warn hover:brightness-95 text-white font-bold text-sm flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Lock className="w-4 h-4" />
@@ -302,7 +314,7 @@ export const DiaScreen: React.FC<DiaScreenProps> = ({ fecha, nombreLocal, onVolv
               </div>
             )}
 
-            {recepcion?.estado === 'cerrada' && guardada && (
+            {recepcion?.estado === 'cerrada' && !recepcion.editable && guardada && (
               <div className="space-y-3">
                 <TotalesRecepcion recepcion={guardada} />
                 <button
@@ -314,6 +326,7 @@ export const DiaScreen: React.FC<DiaScreenProps> = ({ fecha, nombreLocal, onVolv
                 </button>
                 <button
                   onClick={handleReabrir}
+                  disabled={procesando}
                   className="btn-tactile w-full card-flat p-3.5 flex items-center justify-center gap-2 text-sm font-semibold text-warn border border-warn/40 cursor-pointer"
                 >
                   <RotateCcw className="w-4 h-4" />
@@ -321,6 +334,27 @@ export const DiaScreen: React.FC<DiaScreenProps> = ({ fecha, nombreLocal, onVolv
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {!cargando && !detalle && (
+        <div className="p-4 md:p-6">
+          <div className="card-flat p-5 text-center">
+            <AlertTriangle className="w-8 h-8 text-danger mx-auto mb-2" />
+            <p className="text-sm text-ink-soft mb-4">No se pudo cargar la información de este día.</p>
+            <button
+              onClick={() => {
+                setCargando(true);
+                getRecepcionDia(fecha)
+                  .then(setDetalle)
+                  .catch(() => setDetalle(null))
+                  .finally(() => setCargando(false));
+              }}
+              className="btn-tactile w-full h-12 bg-ink hover:bg-terracotta-deep text-white font-bold text-sm flex items-center justify-center gap-2 cursor-pointer"
+            >
+              Reintentar
+            </button>
           </div>
         </div>
       )}
