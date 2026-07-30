@@ -56,16 +56,35 @@ export type RecepcionGuardada = {
   usuarioLocal: string;
 };
 
-// Fila liviana del historial de recepciones (lista de últimos N días)
+// Fila liviana del historial de recepciones (lista de últimos N días).
+// idRecepcion es null y estado es "pendiente" para un día que tiene ventas
+// remitidas pero todavía ninguna recepción iniciada.
 export type RecepcionResumen = {
-  idRecepcion: number | string;
+  idRecepcion: number | string | null;
   fecha: string;
-  timestampInicio: string;
+  timestampInicio: string | null;
   timestampFin: string | null;
-  estado: "en_curso" | "cerrada";
+  estado: "en_curso" | "cerrada" | "pendiente";
   totalEscaneados: number;
   totalFaltantes: number;
   totalSinCobrar: number;
+  totalRemitos: number;
+  montoTotal: number;
+};
+
+// Una venta/remito de la fábrica a este cliente, con sus líneas de producto.
+export type VentaDia = {
+  idVenta: string;
+  numeroRemito: number | null;
+  monto: number;
+  estado: string;
+  detalles: Array<{
+    idProd: string;
+    nombreProducto: string;
+    cantidad: number | null;
+    partida: string | null;
+    venc: string | null;
+  }>;
 };
 
 /* ---------------------- Stock / Exhibidora ---------------------- */
