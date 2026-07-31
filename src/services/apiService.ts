@@ -242,6 +242,9 @@ function mapVentaDia(v: any): VentaDia {
       cantidad: d.cantidad,
       partida: d.partida ?? null,
       venc: d.venc ?? null,
+      precioUnitario: Number(d.precioUnitario) || 0,
+      subtotal: Number(d.subtotal) || 0,
+      recepcionado: Boolean(d.recepcionado),
     })),
   };
 }
