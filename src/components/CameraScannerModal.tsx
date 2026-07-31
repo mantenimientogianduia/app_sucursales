@@ -33,6 +33,10 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
   // evita disparar un segundo escaneo mientras el anterior todavia esta
   // esperando la respuesta del servidor.
   const procesandoRef = useRef(false);
+  // Id del timeout de cooldown pendiente. Se guarda para poder cancelarlo si
+  // el modal se cierra dentro de la ventana de espera — sin esto, un timeout
+  // de una sesión anterior podría reanudar/afectar una sesión nueva.
+  const cooldownTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!isOpen) {
@@ -90,7 +94,8 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
     // Cooldown: espera un instante antes de reanudar la cámara. Si el mismo
     // QR sigue en cuadro (el operario no llegó a moverla), evita que se
     // vuelva a leer y procesar de inmediato.
-    window.setTimeout(() => {
+    cooldownTimeoutRef.current = window.setTimeout(() => {
+      cooldownTimeoutRef.current = null;
       procesandoRef.current = false;
       if (html5QrcodeRef.current) {
         try {
@@ -146,6 +151,10 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
         console.warn('Error al detener cámara:', err);
       }
       html5QrcodeRef.current = null;
+    }
+    if (cooldownTimeoutRef.current !== null) {
+      window.clearTimeout(cooldownTimeoutRef.current);
+      cooldownTimeoutRef.current = null;
     }
     procesandoRef.current = false;
     setIsScanning(false);
