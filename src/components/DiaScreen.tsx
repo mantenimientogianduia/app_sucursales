@@ -21,6 +21,7 @@ import {
   construirRecepcionGuardada,
 } from '../services/apiService';
 import { VentasRemitidasList } from './VentasRemitidasList';
+import { formatCantidad } from '../utils/format';
 
 interface DiaScreenProps {
   fecha: string;
@@ -47,10 +48,10 @@ Fecha/Hora: ${recepcion.fecha} ${recepcion.hora} hs
 
 ----------------------------------------
 RESUMEN GENERAL:
-- Total Esperados: ${recepcion.totalesperados} u.
-- Recibidos OK: ${recepcion.totalRecibidosOk} u.
-- Faltantes: ${recepcion.totalFaltantes} u.
-- Sin Cobrar / Extra: ${recepcion.totalSinCobrar} u.
+- Total Esperados: ${formatCantidad(recepcion.totalesperados)} u.
+- Recibidos OK: ${formatCantidad(recepcion.totalRecibidosOk)} u.
+- Faltantes: ${formatCantidad(recepcion.totalFaltantes)} u.
+- Sin Cobrar / Extra: ${formatCantidad(recepcion.totalSinCobrar)} u.
 
 ----------------------------------------
 DETALLE DE NOVEDADES Y RECLAMOS:
@@ -88,7 +89,7 @@ function TotalesRecepcion({ recepcion }: { recepcion: RecepcionGuardada }) {
               Recibido conforme
             </span>
             <h3 className="text-xl font-display font-bold text-ok leading-tight">
-              {recepcion.totalRecibidosOk} unidades OK
+              {formatCantidad(recepcion.totalRecibidosOk)} unidades OK
             </h3>
           </div>
         </div>
@@ -112,7 +113,7 @@ function TotalesRecepcion({ recepcion }: { recepcion: RecepcionGuardada }) {
                 faltantes.length > 0 ? 'text-danger' : 'text-ink'
               }`}
             >
-              {recepcion.totalFaltantes} unidades no llegaron
+              {formatCantidad(recepcion.totalFaltantes)} unidades no llegaron
             </h3>
           </div>
         </div>
@@ -144,7 +145,7 @@ function TotalesRecepcion({ recepcion }: { recepcion: RecepcionGuardada }) {
                 sinCobrar.length > 0 ? 'text-warn' : 'text-ink'
               }`}
             >
-              {recepcion.totalSinCobrar} unidades sin pedido previo
+              {formatCantidad(recepcion.totalSinCobrar)} unidades sin pedido previo
             </h3>
           </div>
         </div>
