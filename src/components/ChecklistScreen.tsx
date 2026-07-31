@@ -8,9 +8,12 @@ import {
   Clock,
   ArrowRight,
   ArrowLeft,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { ItemEsperado, ItemEscaneado } from '../types';
 import { Stamp } from './ui/Stamp';
+import { formatCantidad } from '../utils/format';
 
 interface ChecklistScreenProps {
   esperados: ItemEsperado[];
@@ -21,6 +24,13 @@ interface ChecklistScreenProps {
   onVolver: () => void;
 }
 
+type GrupoProducto = {
+  idProd: string;
+  nombreProducto: string;
+  categoria: string | null;
+  items: ItemEsperado[];
+};
+
 export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
   esperados,
   escaneados,
@@ -30,6 +40,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
   onVolver,
 }) => {
   const [filtro, setFiltro] = useState<'todos' | 'pendientes' | 'coinciden' | 'extra'>('todos');
+  const [abiertoIdProd, setAbiertoIdProd] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<{ text: string; type: 'match' | 'extra' } | null>(null);
   const cantidadAnteriorRef = useRef(escaneados.length);
 
@@ -44,12 +55,13 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
       ? escaneados.filter(esc => esc.partida === esp.partida)
       : escaneados.filter(esc => esc.idProd === esp.idProd && !esc.partida);
 
-  const totalEsperadosDistintos = esperados.length;
-
-  const esperadosCumplidosCount = esperados.filter(esp => {
+  const esperadoCompleto = (esp: ItemEsperado) => {
     const sum = capturasParaEsperado(esp).reduce((a, b) => a + b.cantidad, 0);
     return sum >= esp.cantidad;
-  }).length;
+  };
+
+  const totalEsperadosDistintos = esperados.length;
+  const esperadosCumplidosCount = esperados.filter(esperadoCompleto).length;
 
   const totalUnidadesEsperadas = esperados.reduce((a, b) => a + b.cantidad, 0);
   const totalUnidadesRecibidasOk = esperados.reduce((acc, esp) => {
@@ -58,6 +70,44 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
   }, 0);
 
   const porcentajeProgreso = Math.round((totalUnidadesRecibidasOk / Math.max(1, totalUnidadesEsperadas)) * 100);
+
+  // Agrupa las partidas esperadas por producto: el operario sigue el
+  // progreso "X/Y partidas de este producto" en vez de una lista plana con
+  // una fila por cada partida individual (más difícil de seguir cuando un
+  // mismo producto trae varias partidas distintas el mismo día).
+  const grupos: GrupoProducto[] = React.useMemo(() => {
+    const map = new Map<string, GrupoProducto>();
+    esperados.forEach((esp) => {
+      const existente = map.get(esp.idProd);
+      if (existente) {
+        existente.items.push(esp);
+      } else {
+        map.set(esp.idProd, {
+          idProd: esp.idProd,
+          nombreProducto: esp.nombreProducto,
+          categoria: esp.categoria,
+          items: [esp],
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [esperados]);
+
+  const completosDeGrupo = (grupo: GrupoProducto) => grupo.items.filter(esperadoCompleto).length;
+
+  // Los filtros (y sus contadores en las pestañas) operan sobre productos,
+  // no sobre partidas individuales — coincide con lo que se ve en la lista.
+  const totalProductos = grupos.length;
+  const productosCompletos = grupos.filter((g) => completosDeGrupo(g) === g.items.length).length;
+  const productosPendientes = totalProductos - productosCompletos;
+
+  const gruposVisibles = grupos.filter((g) => {
+    if (filtro === 'extra') return false;
+    const completos = completosDeGrupo(g);
+    if (filtro === 'pendientes') return completos < g.items.length;
+    if (filtro === 'coinciden') return completos === g.items.length;
+    return true;
+  });
 
   useEffect(() => {
     if (toastMsg) {
@@ -106,7 +156,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
               {porcentajeProgreso}%
             </span>
             <span className="block text-[10px] font-ticket text-paper-raised/60 mt-0.5">
-              {totalUnidadesRecibidasOk}/{totalUnidadesEsperadas} u.
+              {formatCantidad(totalUnidadesRecibidasOk)}/{formatCantidad(totalUnidadesEsperadas)} u.
             </span>
           </div>
         </div>
@@ -121,9 +171,9 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
         <div className="flex px-2 py-1.5 bg-black/20 space-x-1 overflow-x-auto text-xs">
           {(
             [
-              ['todos', `Todos (${esperados.length})`],
-              ['pendientes', `Pendientes (${esperados.length - esperadosCumplidosCount})`],
-              ['coinciden', `Coincidieron (${esperadosCumplidosCount})`],
+              ['todos', `Todos (${totalProductos})`],
+              ['pendientes', `Pendientes (${productosPendientes})`],
+              ['coinciden', `Coincidieron (${productosCompletos})`],
               ['extra', `No esperados (${escaneados.filter(e => !e.matched).length})`],
             ] as const
           ).map(([key, label]) => (
@@ -157,84 +207,119 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
         )}
       </AnimatePresence>
 
-      {/* LISTA */}
+      {/* LISTA AGRUPADA POR PRODUCTO */}
       <div className="px-4 md:px-6 pt-3">
-        <div className="sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-x-6">
-        <AnimatePresence>
-          {esperados.map((esp, index) => {
-            const escaneadosParaEsp = capturasParaEsperado(esp);
-            const totalRecibido = escaneadosParaEsp.reduce((acc, curr) => acc + curr.cantidad, 0);
+        <div className="sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-x-6 sm:items-start">
+          <AnimatePresence>
+            {gruposVisibles.map((grupo, index) => {
+              const completos = completosDeGrupo(grupo);
+              const abierto = abiertoIdProd === grupo.idProd;
+              const grupoCompleto = completos === grupo.items.length;
 
-            const isCompleto = totalRecibido >= esp.cantidad;
-            const isParcial = totalRecibido > 0 && totalRecibido < esp.cantidad;
+              return (
+                <motion.div
+                  key={grupo.idProd}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.22, delay: Math.min(index * 0.03, 0.3) }}
+                  className={`list-row py-0 flex flex-col ${grupoCompleto ? 'opacity-80' : ''}`}
+                >
+                  <button
+                    onClick={() => setAbiertoIdProd(abierto ? null : grupo.idProd)}
+                    className="btn-tactile w-full py-3 flex items-start justify-between gap-2 cursor-pointer text-left"
+                  >
+                    <div className="min-w-0">
+                      {grupo.categoria && (
+                        <span className="inline-block text-[10px] font-ticket font-semibold uppercase tracking-wider text-ink-soft bg-paper-sunken px-1.5 py-0.5">
+                          {grupo.categoria}
+                        </span>
+                      )}
+                      <h4 className="text-sm font-semibold text-ink leading-snug mt-0.5">
+                        {grupo.nombreProducto}
+                      </h4>
+                    </div>
 
-            if (filtro === 'pendientes' && isCompleto) return null;
-            if (filtro === 'coinciden' && totalRecibido === 0) return null;
-            if (filtro === 'extra') return null;
+                    <div className="flex items-center gap-2 shrink-0 mt-0.5">
+                      {grupoCompleto ? (
+                        <Stamp variant="ok">
+                          <CheckCircle2 className="w-3 h-3" />
+                          {completos}/{grupo.items.length} partidas
+                        </Stamp>
+                      ) : completos > 0 ? (
+                        <Stamp variant="warn">
+                          <Clock className="w-3 h-3" />
+                          {completos}/{grupo.items.length} partidas
+                        </Stamp>
+                      ) : (
+                        <span className="text-xs font-ticket text-ink-soft/70">
+                          {completos}/{grupo.items.length} partidas
+                        </span>
+                      )}
+                      {abierto ? (
+                        <ChevronUp className="w-4 h-4 text-ink-soft/50" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-ink-soft/50" />
+                      )}
+                    </div>
+                  </button>
 
-            return (
-              <motion.div
-                key={`${esp.idProd}-${esp.partida || 'sin-partida'}-${index}`}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.22, delay: Math.min(index * 0.03, 0.3) }}
-                className={`list-row py-3 flex flex-col gap-1.5 ${isCompleto ? 'opacity-80' : ''}`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    {esp.categoria && (
-                      <span className="inline-block text-[10px] font-ticket font-semibold uppercase tracking-wider text-ink-soft bg-paper-sunken px-1.5 py-0.5">
-                        {esp.categoria}
-                      </span>
-                    )}
-                    {esp.partida && (
-                      <span
-                        className="block text-[10px] font-ticket text-ink-soft/70 truncate max-w-[190px] mt-0.5"
-                        title={esp.partida}
-                      >
-                        {esp.partida}
-                      </span>
-                    )}
-                    <h4 className="text-sm font-semibold text-ink leading-snug mt-0.5">
-                      {esp.nombreProducto}
-                    </h4>
-                  </div>
+                  {abierto && (
+                    <div className="pb-3 space-y-2.5 border-t border-ink/10 pt-2.5">
+                      {grupo.items.map((esp, i) => {
+                        const escaneadosParaEsp = capturasParaEsperado(esp);
+                        const totalRecibido = escaneadosParaEsp.reduce((acc, curr) => acc + curr.cantidad, 0);
+                        const isCompleto = totalRecibido >= esp.cantidad;
+                        const isParcial = totalRecibido > 0 && totalRecibido < esp.cantidad;
 
-                  {isCompleto ? (
-                    <motion.div
-                      initial={{ scale: 0, rotate: 8 }}
-                      animate={{ scale: 1, rotate: -2.5 }}
-                      transition={{ type: 'spring', stiffness: 400, damping: 15 }}
-                    >
-                      <Stamp variant="ok">
-                        <CheckCircle2 className="w-3 h-3" />
-                        {totalRecibido}/{esp.cantidad}
-                      </Stamp>
-                    </motion.div>
-                  ) : isParcial ? (
-                    <Stamp variant="warn">
-                      <Clock className="w-3 h-3" />
-                      {totalRecibido}/{esp.cantidad}
-                    </Stamp>
-                  ) : (
-                    <span className="text-xs font-ticket text-ink-soft/70 shrink-0 mt-0.5">0/{esp.cantidad}</span>
+                        return (
+                          <div key={`${esp.idProd}-${esp.partida || 'sin-partida'}-${i}`} className="flex flex-col gap-1.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                {esp.partida && (
+                                  <span
+                                    className="block text-[10px] font-ticket text-ink-soft/70 truncate max-w-[190px]"
+                                    title={esp.partida}
+                                  >
+                                    {esp.partida}
+                                  </span>
+                                )}
+                              </div>
+                              {isCompleto ? (
+                                <Stamp variant="ok">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  {formatCantidad(totalRecibido)}/{formatCantidad(esp.cantidad)}
+                                </Stamp>
+                              ) : isParcial ? (
+                                <Stamp variant="warn">
+                                  <Clock className="w-3 h-3" />
+                                  {formatCantidad(totalRecibido)}/{formatCantidad(esp.cantidad)}
+                                </Stamp>
+                              ) : (
+                                <span className="text-xs font-ticket text-ink-soft/70 shrink-0">
+                                  0/{formatCantidad(esp.cantidad)}
+                                </span>
+                              )}
+                            </div>
+
+                            {escaneadosParaEsp.length > 0 && (
+                              <div className="pl-0.5 space-y-1">
+                                {escaneadosParaEsp.map((esc) => (
+                                  <div key={esc.id} className="flex items-center justify-between text-[11px] font-ticket text-ink-soft">
+                                    <span>{esc.origenCarga === 'qr' ? 'QR' : 'Manual'} · {esc.timestamp}</span>
+                                    <span className="font-bold text-ink">{formatCantidad(esc.cantidad)} u.</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
-                </div>
-
-                {escaneadosParaEsp.length > 0 && (
-                  <div className="pl-0.5 space-y-1">
-                    {escaneadosParaEsp.map((esc) => (
-                      <div key={esc.id} className="flex items-center justify-between text-[11px] font-ticket text-ink-soft">
-                        <span>{esc.origenCarga === 'qr' ? 'QR' : 'Manual'} · {esc.timestamp}</span>
-                        <span className="font-bold text-ink">{esc.cantidad} u.</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
         </div>
 
         {/* NO ESPERADOS */}
@@ -255,7 +340,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({
                     {esc.idProd} {esc.partida ? `· ${esc.partida}` : ''}
                   </p>
                 </div>
-                <span className="font-bold text-sm text-danger shrink-0 ml-2">{esc.cantidad} u.</span>
+                <span className="font-bold text-sm text-danger shrink-0 ml-2">{formatCantidad(esc.cantidad)} u.</span>
               </div>
             ))}
           </div>
