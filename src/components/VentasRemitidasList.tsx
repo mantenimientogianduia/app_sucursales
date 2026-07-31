@@ -65,7 +65,7 @@ export const VentasRemitidasList: React.FC<VentasRemitidasListProps> = ({ ventas
                         {d.recepcionado && <CheckCircle2 className="w-3.5 h-3.5 text-ok shrink-0" />}
                         <span className="text-ink-soft truncate">{d.nombreProducto}</span>
                       </div>
-                      <span className="text-ink-soft/70 shrink-0">{formatCantidad(d.cantidad ?? 0)} u.</span>
+                      <span className="text-ink-soft/70 shrink-0">{d.cantidad === null ? '—' : formatCantidad(d.cantidad)} u.</span>
                       <span className="text-ink-soft/70 shrink-0">{formatMonto(d.precioUnitario)}</span>
                       <span className="font-bold text-ink shrink-0">{formatMonto(d.subtotal)}</span>
                     </div>
