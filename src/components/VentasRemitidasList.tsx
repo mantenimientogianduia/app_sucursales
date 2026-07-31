@@ -1,6 +1,7 @@
 import React from 'react';
-import { Receipt, ChevronDown, ChevronUp } from 'lucide-react';
+import { Receipt, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
 import { VentaDia } from '../types';
+import { formatCantidad } from '../utils/format';
 
 interface VentasRemitidasListProps {
   ventas: VentaDia[];
@@ -57,11 +58,16 @@ export const VentasRemitidasList: React.FC<VentasRemitidasListProps> = ({ ventas
               </button>
 
               {abierto && (
-                <div className="px-3 pb-3 space-y-1 border-t border-ink/10 pt-2">
+                <div className="px-3 pb-3 space-y-1.5 border-t border-ink/10 pt-2">
                   {venta.detalles.map((d, idx) => (
-                    <div key={idx} className="flex items-center justify-between text-xs">
-                      <span className="text-ink-soft truncate">{d.nombreProducto}</span>
-                      <span className="font-bold text-ink shrink-0 ml-2">{d.cantidad} u.</span>
+                    <div key={idx} className="flex items-center justify-between gap-2 text-xs">
+                      <div className="min-w-0 flex-1 flex items-center gap-1.5">
+                        {d.recepcionado && <CheckCircle2 className="w-3.5 h-3.5 text-ok shrink-0" />}
+                        <span className="text-ink-soft truncate">{d.nombreProducto}</span>
+                      </div>
+                      <span className="text-ink-soft/70 shrink-0">{formatCantidad(d.cantidad ?? 0)} u.</span>
+                      <span className="text-ink-soft/70 shrink-0">{formatMonto(d.precioUnitario)}</span>
+                      <span className="font-bold text-ink shrink-0">{formatMonto(d.subtotal)}</span>
                     </div>
                   ))}
                 </div>
