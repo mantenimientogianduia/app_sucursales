@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { X, Camera, Zap, AlertCircle, Sparkles, Check, CheckCircle2 } from 'lucide-react';
 import { PRESETS_QR_SIMULADOR } from '../data/mockData';
+import { ItemEscaneado } from '../types';
 
 type ResultadoEscaneo = { matched: boolean; nombreProducto: string } | null;
 
@@ -11,6 +12,7 @@ interface CameraScannerModalProps {
   onClose: () => void;
   onScanResult: (qrRawText: string) => Promise<ResultadoEscaneo>;
   totalEscaneados: number;
+  escaneados: ItemEscaneado[];
 }
 
 export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
@@ -18,6 +20,7 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
   onClose,
   onScanResult,
   totalEscaneados,
+  escaneados,
 }) => {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
@@ -56,8 +59,9 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
 
   // Punto único de entrada para procesar un texto de QR, venga de la cámara
   // real, de un preset del simulador, o del input manual. Pausa la cámara
-  // mientras espera al servidor y la retoma sola al terminar — así el
-  // operario no tiene que volver a abrir el escáner entre partida y partida.
+  // mientras espera al servidor y la retoma sola al terminar (con un
+  // cooldown, ver abajo) — así el operario no tiene que volver a abrir el
+  // escáner entre partida y partida.
   const procesarQr = async (qrRawText: string) => {
     if (procesandoRef.current) return;
     procesandoRef.current = true;
@@ -70,17 +74,32 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
       }
     }
 
-    const resultado = await onScanResult(qrRawText);
-    mostrarFeedback(resultado);
-
-    procesandoRef.current = false;
-    if (html5QrcodeRef.current) {
-      try {
-        html5QrcodeRef.current.resume();
-      } catch {
-        // si el modal se cerró mientras esperábamos, no hay nada que retomar
-      }
+    // Duplicado: esta misma partida (texto crudo del QR) ya fue escaneada en
+    // esta sesión. Se corta antes de llamar al servidor — no tiene sentido
+    // registrar la misma partida física dos veces, y esto es justamente lo
+    // que pasa seguido cuando el código sigue en cuadro después de leerse.
+    const yaEscaneado = escaneados.some((e) => e.partida === qrRawText);
+    if (yaEscaneado) {
+      setFeedback({ text: 'Ya escaneado', ok: false });
+      window.setTimeout(() => setFeedback(null), 1100);
+    } else {
+      const resultado = await onScanResult(qrRawText);
+      mostrarFeedback(resultado);
     }
+
+    // Cooldown: espera un instante antes de reanudar la cámara. Si el mismo
+    // QR sigue en cuadro (el operario no llegó a moverla), evita que se
+    // vuelva a leer y procesar de inmediato.
+    window.setTimeout(() => {
+      procesandoRef.current = false;
+      if (html5QrcodeRef.current) {
+        try {
+          html5QrcodeRef.current.resume();
+        } catch {
+          // si el modal se cerró mientras esperábamos, no hay nada que retomar
+        }
+      }
+    }, 1000);
   };
 
   const startCamera = async () => {

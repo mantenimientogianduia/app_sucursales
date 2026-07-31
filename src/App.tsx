@@ -269,6 +269,7 @@ export default function App() {
         onClose={() => setIsScannerOpen(false)}
         onScanResult={handleScanResult}
         totalEscaneados={escaneados.length}
+        escaneados={escaneados}
       />
 
       <ManualEntryModal
