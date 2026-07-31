@@ -84,6 +84,9 @@ export type VentaDia = {
     cantidad: number | null;
     partida: string | null;
     venc: string | null;
+    precioUnitario: number;
+    subtotal: number;
+    recepcionado: boolean;
   }>;
 };
 
